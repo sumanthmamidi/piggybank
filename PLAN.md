@@ -148,7 +148,7 @@ Rules:
      same amount, account and time within 15 minutes (e.g. bank SMS + UPI app SMS)
      becomes a "possible duplicate" in review, unless that pair is in `dup_dismissed`.
 4. **Classify**, in this order:
-   1. Own-account pair (debit from own A, credit to own B, same amount, ±60 min, or a
+   1. Own-account pair, **suggested only** (the user marks every self-transfer): debit from own A, credit to own B, same amount, ±60 min, or a
       counterparty last4 that is an own account) → `SELF_TRANSFER`. Both halves are linked.
    2. Credit card bill payment (debit SMS mentioning card payment/BillDesk/CRED to own
       card, or a card SMS "payment received") → `CC_BILL`. Card spends are counted once,
@@ -294,3 +294,10 @@ is written to a fixed path the app always uses.
   (home currency + rates entered by the user, never fetched).
 - **Decided:** refunds are not read from SMS. The user marks a refund (full or partial,
   never more than the original) on the original spend with "Mark refund" (B6).
+- **Decided (23 Nov 2026):** self-transfers are never marked automatically. A detected one is
+  suggested in review (pre-selected, with the reason) and keeps counting as a spend until the user
+  marks it. A rule the user creates for a payee can still apply their own choice.
+- **Decided (23 Nov 2026):** duplicates are decided by SMS format. Same bank, same amount and account,
+  two different formats within 4 hours → marked automatically. Same format → never a duplicate, never
+  asked (checked on real SMS: 4 ATM withdrawals a minute apart are real). Different senders within
+  15 minutes → asked in review. Undoing one records the pair as separate so it is never re-marked.

@@ -42,3 +42,29 @@ INSERT OR REPLACE INTO fx_rate(currency, rate_to_home, set_at) VALUES (?, ?, ?);
 
 selectRate:
 SELECT * FROM fx_rate WHERE currency = ?;
+
+selectAllIncome:
+SELECT * FROM income WHERE active = 1 ORDER BY from_month, name;
+
+lastIncomeId:
+SELECT last_insert_rowid();
+
+updateIncome:
+UPDATE income SET name = ?, amount_minor = ?, schedule = ?, from_month = ?, to_month = ?, months_mask = ? WHERE id = ?;
+
+-- D7c: a raise ends the old line the month before; past months keep the old amount.
+endIncome:
+UPDATE income SET to_month = ? WHERE id = ?;
+
+deactivateIncome:
+UPDATE income SET active = 0 WHERE id = ?;
+
+-- Budgets carry forward: a month without its own budget uses the latest earlier month's.
+selectBudgetMonthOnOrBefore:
+SELECT max(month) AS month FROM budget WHERE month <= ?;
+
+deleteBudgetMonth:
+DELETE FROM budget WHERE month = ?;
+
+selectRates:
+SELECT * FROM fx_rate ORDER BY currency;

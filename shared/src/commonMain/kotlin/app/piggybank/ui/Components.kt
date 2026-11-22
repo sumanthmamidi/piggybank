@@ -132,6 +132,7 @@ fun TxnRow(t: TxnItem, trailing: (@Composable () -> Unit)? = null, onClick: (() 
                 listOf(tag, t.whenLabel, t.subtitle).filter { it.isNotEmpty() }.joinToString(" · ") + if (t.auto) " · auto" else "",
                 color = Piggy.Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2,
             )
+            t.refunded?.let { Text("Refunded $it", color = Piggy.Invest, style = MaterialTheme.typography.bodySmall) }
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {

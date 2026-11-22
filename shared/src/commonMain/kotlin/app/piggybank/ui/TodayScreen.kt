@@ -19,14 +19,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, modifier: Modifier) {
+fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMonth: () -> Unit, modifier: Modifier) {
+    var selected by remember { mutableStateOf<TxnItem?>(null) }
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -38,14 +42,30 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, modifie
 
         // G1: spends today, split by Need/Want; investments shown apart, never inside "spent".
         PiggyCard(dark = true) {
-            Text("Spent today", color = Color(0xFFB5B9C3))
-            Text(s.spentToday, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Spent today", color = Color(0xFFB5B9C3))
+                    Text(s.spentToday, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    s.allowanceToday?.let { a ->
+                        val left = a - s.spentTodayMinor
+                        Text(
+                            if (left >= 0) "${s.home.fmt(left)} left of today's ${s.home.fmt(a)}" else "${s.home.fmt(-left)} over today's ${s.home.fmt(a)}",
+                            color = if (left >= 0) Piggy.Invest else Piggy.Accent, style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                s.allowanceToday?.let { AllowanceRing(s.spentTodayMinor, it) }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Tile("Needs", s.needs, Piggy.Needs, Modifier.weight(1f))
                 Tile("Wants", s.wants, Piggy.Wants, Modifier.weight(1f))
                 Tile("Untagged", s.untagged, Piggy.Hidden, Modifier.weight(1f))
             }
             Text("Invested today ${s.invested} · not counted as spending", color = Color(0xFFB5B9C3), style = MaterialTheme.typography.bodySmall)
+            if (s.allowanceToday == null) {
+                Text("Set monthly budgets to get a daily allowance ›", color = Piggy.Wants, style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.clickable(onClick = openMonth))
+            }
         }
 
         // F2/F3: the daily close.
@@ -91,7 +111,7 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, modifie
 
         Section("Today's payments")
         if (s.todayItems.isEmpty()) Text("No payments yet today.", color = Piggy.Muted)
-        s.todayItems.forEach { TxnRow(it) }
+        s.todayItems.forEach { t -> TxnRow(t, onClick = { selected = t }) }
 
         if (s.access == SmsAccess.READY) {
             Row(Modifier.fillMaxWidth()) {
@@ -103,6 +123,23 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, modifie
             }
         }
         Text("No network permission · all data stays on this phone", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+    }
+    selected?.let { t ->
+        TxnDialog(t, s.home, onDismiss = { selected = null },
+            onRefund = { c.markRefund(t.id, it); selected = null },
+            onChange = { c.reopen(t.id); selected = null; openReview(ReviewSection.TODAY) },
+            onCountIt = { c.countIt(t.id); selected = null })
+    }
+}
+
+/** G3/G4: today's spend against today's allowance; past 100% it turns the warning colour. */
+@Composable
+private fun AllowanceRing(spent: Long, allowance: Long) {
+    val ratio = if (allowance <= 0) 1f else (spent.toFloat() / allowance)
+    androidx.compose.foundation.Canvas(Modifier.size(84.dp)) {
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 18f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawArc(Color(0xFF2C3039), -90f, 360f, false, style = stroke)
+        drawArc(if (ratio > 1f) Piggy.Accent else Piggy.Invest, -90f, 360f * ratio.coerceAtMost(1f), false, style = stroke)
     }
 }
 

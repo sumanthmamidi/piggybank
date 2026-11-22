@@ -35,6 +35,7 @@ fun App(controller: AppController) {
         var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
         var section by rememberSaveable { mutableIntStateOf(ReviewSection.TODAY) }
         val openReview = { s: Int -> section = s; tab = Tab.REVIEW }
+        val openMonth = { tab = Tab.MONTH }
         Scaffold(
             containerColor = Piggy.Ground,
             bottomBar = {
@@ -65,11 +66,9 @@ fun App(controller: AppController) {
         ) { inner ->
             val m = Modifier.padding(inner)
             when (tab) {
-                Tab.TODAY -> TodayScreen(state, controller, openReview, m)
+                Tab.TODAY -> TodayScreen(state, controller, openReview, openMonth, m)
                 Tab.REVIEW -> ReviewScreen(state, controller, section, { section = it }, m)
-                Tab.MONTH -> Column(m.fillMaxSize().padding(20.dp)) {
-                    Title("Monthly review", "Budgets, income, savings and charts arrive in M3.")
-                }
+                Tab.MONTH -> MonthScreen(state, controller, m)
                 Tab.RULES -> RulesScreen(state, controller, m)
             }
         }

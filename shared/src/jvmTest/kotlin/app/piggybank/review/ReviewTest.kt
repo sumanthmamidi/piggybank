@@ -35,28 +35,35 @@ class ReviewTest {
     /** Ingests SMS then classifies, like the app does after every scan. */
     private fun receive(vararg sms: Pair<String, Long>, sender: String = "VM-HDFCBK") {
         SmsIngestor(db, tz).ingest(sms.map { (body, t) -> IncomingSms(nextId++, sender, body, t, t) })
-        Classifier(db) { 1_000L }.run()
+        Classifier(db, now = { 1_000L }, tz = tz).run()
     }
 
     private fun txns() = db.txnQueries.selectWithDetailsBetween(0, Long.MAX_VALUE).executeAsList()
     private fun only() = txns().single()
     private fun category(name: String) = db.categoryQueries.selectByName(name).executeAsOne().id
 
-    @Test fun d1DebitPairedWithCreditInOwnAccountIsSelfTransfer() {
+    /** Self-transfers are only ever marked by the user: detected ones are suggested and still count. */
+    @Test fun d1DebitPairedWithCreditInOwnAccountIsSuggestedAsSelfTransfer() {
         receive(
             "RTGS txn initiated: Of Rs.400000 from your HDFC Bank A/c XX1111 using Online Banking." to at(21, 8, 20),
             "INR 400000.00 credited to Axis Bank A/c XX2222 on 21-11-26 at 08:23:48 IST." to at(21, 8, 24),
         )
         val t = only()
-        assertEquals("SELF_TRANSFER", t.kind)
-        assertEquals("RULE", t.tag_source)
-        assertNotNull(t.reviewed_at) // hidden, no review needed
+        assertEquals("SPEND", t.kind) // still counted …
+        assertEquals("SELF_TRANSFER", t.suggested_kind) // … but suggested
+        assertEquals("Money arrived in your account ••2222", t.suggest_reason)
+        assertNull(t.reviewed_at) // waits for the user
+        review.tag(listOf(t.id), "SELF_TRANSFER", category("Self-transfer"), null, remember = false)
+        assertEquals("SELF_TRANSFER", only().kind)
     }
 
-    @Test fun d2DebitNamingOwnAccountIsSelfTransfer() {
+    @Test fun d2DebitNamingOwnAccountIsSuggestedAsSelfTransfer() {
         receive("Rs.500 debited from A/c XX2222 to VPA cafe@okaxis on 01-11-26" to at(1)) // XX2222 becomes known as own
         receive("IMPS INR 70,211.00 sent from HDFC Bank A/c XX1111 on 21-11-26 To A/c xxxxxxxxxx2222 Ref-6275" to at(21))
-        assertEquals("SELF_TRANSFER", txns().first().kind)
+        val t = txns().first()
+        assertEquals("SPEND", t.kind)
+        assertEquals("SELF_TRANSFER", t.suggested_kind)
+        assertNull(t.reviewed_at)
     }
 
     @Test fun d3TransferToSomeoneElseGoesToReview() {
@@ -175,18 +182,68 @@ class ReviewTest {
         assertEquals("USER_PICKED", db.smsQueries.selectSmsById(sms.id).executeAsOne().status)
     }
 
-    @Test fun a6aPossibleDuplicateAndSeparate() {
+    private val autoPay = "AutoPay (E-mandate) Success!\nFor Google Play\nTxn Amt:INR149.00\nDt:05/11/2026\nVia:HDFC Bank CC 4444"
+    private val cardSpend = "Rs.149 spent on HDFC Bank Card x4444 At GOOGLEPLAY On 2026-11-05:17:15:26."
+
+    @Test fun a6eSameBankTwoFormatsIsMarkedAutomatically() {
+        receive(autoPay to at(5, 17, 15), cardSpend to at(5, 17, 16))
+        val dup = txns().single { it.duplicate_of != null }
+        assertEquals("AUTO", dup.duplicate_by)
+        assertEquals("GOOGLEPLAY", txns().single { it.duplicate_of == null }.counterparty_raw) // the one naming the payee stays
+    }
+
+    @Test fun a6eAlertAndUpdateHoursApart() {
         receive(
-            "AutoPay (E-mandate) Success!\nFor Google Play\nTxn Amt:INR149.00\nDt:05/11/2026\nVia:HDFC Bank CC 4444" to at(5, 17, 15),
-            "Rs.149 spent on HDFC Bank Card x4444 At GOOGLEPLAY On 2026-11-05:17:15:26." to at(5, 17, 16),
+            "UPDATE: INR 10,029.00 debited from HDFC Bank XX1111 on 19-NOV-26. Info: ACH D- AcmeStandardLifeInsu-2900." to at(19, 8, 28),
+            "PAYMENT ALERT!  INR 10029.00 deducted from HDFC Bank A/C No 1111 towards Acme Life Insurance Company Lt UMRN: HDFC70" to at(19, 11, 17),
         )
+        assertEquals(1, txns().count { it.duplicate_by == "AUTO" })
+    }
+
+    @Test fun sameFormatSameDayIsNeverADuplicate() {
+        // Four ATM withdrawals a minute apart: same SMS format, the balance drops each time.
+        val atm = (0..3).map { i ->
+            "INR 10000.00 debited from A/c no. XX932222 on FBL ATM 19-09-2026 16:5$i:07 IST. Avl bal: INR ${115 - 10 * i},199.16." to at(19, 16, 50 + i, mo = 9)
+        }
+        receive(*atm.toTypedArray(), sender = "VM-AXISBK")
+        assertTrue(txns().all { it.duplicate_of == null })
+        txns().forEach { assertNull(db.txnQueries.selectPossibleDuplicate(it.id).executeAsOneOrNull()) } // and never asked
+    }
+
+    @Test fun twoPeopleSameAmountSameDayAreNotDuplicates() {
+        receive(
+            "Sent Rs.70.00\nFrom HDFC Bank A/C *1111\nTo C KUMAR\nOn 10/11/26\nRef 6314633" to at(10, 14, 5),
+            "Sent Rs.70.00\nFrom HDFC Bank A/C *1111\nTo Mr Raju\nOn 10/11/26\nRef 6314642" to at(10, 15, 24),
+            sender = "AD-HDFCBK-T",
+        )
+        assertTrue(txns().all { it.duplicate_of == null })
+        val templates = db.smsQueries.selectByStatus("PARSED").executeAsList().map { it.template_id }.toSet()
+        assertEquals(1, templates.size) // "Mr" doesn't make a new format
+    }
+
+    @Test fun a6aDifferentSendersAreAskedNotMarked() {
+        receive(swiggyCard to at(20, 10, 0))
+        receive("Paid Rs.420 to Swiggy via UPI. UPI Ref 6236" to at(20, 10, 3), sender = "VM-PAYAPP")
         val (a, b) = txns().map { it.id }.sorted()
+        assertTrue(txns().all { it.duplicate_of == null })
         assertEquals(a, db.txnQueries.selectPossibleDuplicate(b).executeAsOneOrNull()?.id)
+        review.separatePayments(a, b) // A6d
+        assertNull(db.txnQueries.selectPossibleDuplicate(b).executeAsOneOrNull())
+    }
+
+    @Test fun a6cUndoneAutoDuplicateIsNeverMarkedAgain() {
+        receive(autoPay to at(5, 17, 15), cardSpend to at(5, 17, 16))
+        review.undoDuplicate(txns().single { it.duplicate_of != null }.id)
+        receive("Rs.99.00 spent on HDFC Bank Card x4421 at CAFE on 22-11-26." to at(22)) // triggers another run
+        assertTrue(txns().all { it.duplicate_of == null })
+    }
+
+    @Test fun a6bManualDuplicateLeavesTotals() {
+        receive(swiggyCard to at(20, 10, 0))
+        receive("Paid Rs.420 to Swiggy via UPI. UPI Ref 6236" to at(20, 10, 3), sender = "VM-PAYAPP")
+        val (a, b) = txns().map { it.id }.sorted()
         review.markDuplicate(b, a)
         assertEquals(1, txns().count { it.duplicate_of == null })
-        review.undoDuplicate(b)
-        review.separatePayments(a, b)
-        assertNull(db.txnQueries.selectPossibleDuplicate(b).executeAsOneOrNull())
     }
 
     @Test fun f2f4Streak() {

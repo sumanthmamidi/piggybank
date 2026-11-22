@@ -42,6 +42,15 @@ class PrivateCorpusReport {
         out.appendLine("\n== CLASSIFIED $tagged of ${all.size}")
         all.groupBy { "${it.kind} ${it.tag_source} ${it.category_name}" }.entries.sortedByDescending { it.value.size }
             .forEach { (k, v) -> out.appendLine("${v.size}  $k") }
+        out.appendLine("\n== AUTO DUPLICATES")
+        db.txnQueries.selectDuplicates().executeAsList().forEach { d ->
+            val kept = db.txnQueries.selectById(d.duplicate_of!!).executeAsOne()
+            out.appendLine("${d.orig_amount_minor / 100} | dup: ${d.counterparty_raw} | kept: ${kept.counterparty_raw} | ${d.duplicate_by}")
+        }
+        out.appendLine("\n== STILL ASKED (possible duplicates)")
+        all.filter { it.duplicate_of == null }.forEach { t ->
+            db.txnQueries.selectPossibleDuplicate(t.id).executeAsOneOrNull()?.let { o -> out.appendLine("${t.orig_amount_minor / 100} | ${t.counterparty_raw} ~ ${o.counterparty_raw}") }
+        }
         out.appendLine("\n== HIDDEN / INVESTMENT detail")
         all.filter { it.kind != "SPEND" }.forEach {
             out.appendLine("${it.kind} | ${it.orig_amount_minor / 100} | ${it.counterparty_raw} | ${it.body?.replace('\n', ' ')?.take(110)}")

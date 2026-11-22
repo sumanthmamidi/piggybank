@@ -149,7 +149,11 @@ private fun ReviewCard(
             }
         }
 
-        if (g.guessed && categoryId != null) Text("Suggested · check and confirm", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+        g.suggestion?.let {
+            Text("Possible self-transfer: $it. It counts as a spend until you mark it.", color = Piggy.Needs, style = MaterialTheme.typography.bodySmall)
+        } ?: run {
+            if (g.guessed && categoryId != null) Text("Suggested · check and confirm", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+        }
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             KINDS.forEach { k ->

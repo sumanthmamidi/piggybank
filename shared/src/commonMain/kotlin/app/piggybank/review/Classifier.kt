@@ -8,6 +8,7 @@ import app.piggybank.sms.Direction
 import app.piggybank.sms.Signature
 import app.piggybank.sms.SmsParser
 import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
 
 /** The outcome of classifying one payment. [decided] = no review needed (a rule or a sure detection). */
 data class Tag(
@@ -18,6 +19,8 @@ data class Tag(
     val ruleId: Long? = null,
     /** Why, shown on the card: "Your rule", "Money arrived in ••2222", "Looks like groceries". */
     val reason: String,
+    /** A kind to pre-select in review without applying it (self-transfers are only marked by the user). */
+    val suggestKind: String? = null,
 )
 
 /**
@@ -25,13 +28,18 @@ data class Tag(
  * 1. own-account transfer (D1, D2), 2. credit card bill (D4), 3. the user's rules (E1–E7), 4. a guess.
  * Only touches payments nobody has decided yet, so it is safe to run after every scan.
  */
-class Classifier(private val db: PiggyDatabase, private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }) {
+class Classifier(
+    private val db: PiggyDatabase,
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val tz: TimeZone = TimeZone.currentSystemDefault(),
+) {
 
     private val categories by lazy { db.categoryQueries.selectActive().executeAsList().associateBy { it.name } }
     private val rules by lazy { db.ruleQueries.selectAll().executeAsList() }
 
     /** Classifies every undecided payment. Returns how many were tagged. */
     fun run(): Int = db.transactionWithResult {
+        Duplicates.autoMark(db)
         var n = 0
         for (row in db.txnQueries.selectForClassify().executeAsList()) {
             val tag = classify(row) ?: continue
@@ -44,6 +52,7 @@ class Classifier(private val db: PiggyDatabase, private val now: () -> Long = { 
                 reviewed_at = if (tag.decided) now() else null,
                 id = row.id,
             )
+            db.txnQueries.setSuggestion(tag.suggestKind, tag.reason.takeIf { tag.suggestKind != null }, row.id)
             if (tag.decided && tag.ruleId != null) db.ruleQueries.recordHit(now(), tag.ruleId)
             n++
         }
@@ -60,7 +69,7 @@ class Classifier(private val db: PiggyDatabase, private val now: () -> Long = { 
             val own = db.accountQueries.selectOwnByLast4(to).executeAsList()
             if (own.isNotEmpty()) {
                 return if (own.any { it.kind == "CARD" }) excluded("CC_BILL", "Card bill payment", "Paid to your card ••$to")
-                else excluded("SELF_TRANSFER", "Self-transfer", "To your account ••$to")
+                else suggestTransfer("To your account ••$to")
             }
         }
         pairedCredit(row, fromLast4)?.let { return it }
@@ -94,6 +103,13 @@ class Classifier(private val db: PiggyDatabase, private val now: () -> Long = { 
         return null
     }
 
+    /**
+     * Self-transfers are never marked automatically: the payment stays a spend (and counts) until the
+     * user marks it in review, where "Self-transfer" is pre-selected with this reason.
+     */
+    private fun suggestTransfer(reason: String) =
+        Tag("SPEND", null, null, decided = false, reason = reason, suggestKind = "SELF_TRANSFER")
+
     private fun excluded(kind: String, category: String, reason: String) =
         Tag(kind, categories[category]?.id, null, decided = true, reason = reason)
 
@@ -114,7 +130,7 @@ class Classifier(private val db: PiggyDatabase, private val now: () -> Long = { 
             val isCard = p.accountIsCard || CARD_WORD.containsMatchIn(c.body)
             if (isCard) return excluded("CC_BILL", "Card bill payment", "Payment received on your card ••$to")
             if (kotlin.math.abs(c.received_at - sent) <= HOUR) {
-                return excluded("SELF_TRANSFER", "Self-transfer", "Money arrived in your account ••$to")
+                return suggestTransfer("Money arrived in your account ••$to")
             }
         }
         return null

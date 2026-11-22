@@ -35,7 +35,7 @@ class ReviewService(
                 whitelistFormatOf(id, at)
             }
         }
-        if (remember) Classifier(db, now).run()
+        if (remember) Classifier(db, now, tz).run()
     }
 
     private fun upsertRule(vpa: String?, counterparty: String?, kind: String, categoryId: Long?, needWant: String?, fromTxn: Long): Long? {
@@ -86,7 +86,7 @@ class ReviewService(
             db.smsQueries.selectSmsById(smsId).executeAsOne().template_id?.let { db.smsQueries.whitelistIfPending(now(), it) }
             txnId
         }
-        if (id != null) Classifier(db, now).run()
+        if (id != null) Classifier(db, now, tz).run()
         return id
     }
 
@@ -94,7 +94,12 @@ class ReviewService(
     fun markDuplicate(id: Long, of: Long) = db.txnQueries.markDuplicate(of, "USER", id)
 
     /** A6c */
-    fun undoDuplicate(id: Long) = db.txnQueries.clearDuplicate(id)
+    fun undoDuplicate(id: Long) = db.transaction {
+        val of = db.txnQueries.selectById(id).executeAsOneOrNull()?.duplicate_of
+        db.txnQueries.clearDuplicate(id)
+        // Undone means "these are two payments": never mark this pair again, by hand or automatically.
+        if (of != null) db.txnQueries.dismissDuplicatePair(minOf(id, of), maxOf(id, of))
+    }
 
     /** A6d: both stay, and this pair is never suggested again. */
     fun separatePayments(a: Long, b: Long) = db.txnQueries.dismissDuplicatePair(minOf(a, b), maxOf(a, b))

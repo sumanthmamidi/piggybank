@@ -12,6 +12,7 @@ object Signature {
     /** Any token with a digit: refs, codes ("FEST500"), plain numbers. */
     private val digits = Regex("""[A-Za-z]*\d[A-Za-z0-9]*""")
     private val spaces = Regex("""\s+""")
+    private val honorific = Regex("""\b(?:mr|mrs|ms|miss|dr|smt|shri|sri|m/s)\.?\s*\{PARTY\}""", RegexOption.IGNORE_CASE)
 
     /** "VM-HDFCBK", "AD-HDFCBK-S" → "HDFCBK". Plain phone numbers collapse to "PHONE". */
     fun senderKey(sender: String): String {
@@ -25,6 +26,8 @@ object Signature {
         val merchant = parsed?.merchant
         if (merchant != null && merchant != parsed.vpa && merchant.length >= 2) {
             t = t.replace(merchant, "{PARTY}", ignoreCase = true)
+            // "To Mr Raju" and "To C KUMAR" are the same format: the title is part of the name.
+            t = honorific.replace(t, "{PARTY}")
         }
         t = SmsParser.vpaPattern.replace(t, "{VPA}")
         t = url.replace(t, "{URL}")

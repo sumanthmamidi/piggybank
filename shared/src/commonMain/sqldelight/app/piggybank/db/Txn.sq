@@ -25,6 +25,9 @@ CREATE TABLE txn (
     note              TEXT,
     duplicate_of      INTEGER REFERENCES txn(id),
     duplicate_by      TEXT    CHECK (duplicate_by IN ('USER', 'AUTO')),
+    -- What the app thinks this might be (e.g. a self-transfer), shown in review. Never applied without the user.
+    suggested_kind    TEXT    CHECK (suggested_kind IN ('SPEND', 'INVESTMENT', 'SELF_TRANSFER', 'CC_BILL', 'WALLET_TOPUP')),
+    suggest_reason    TEXT,
     CHECK (refund_minor <= coalesce(home_amount_minor, orig_amount_minor))
 );
 
@@ -129,7 +132,9 @@ WHERE t.tag_source = 'RULE' AND t.duplicate_of IS NULL
   AND coalesce(r.received_at, t.occurred_at) >= :from AND coalesce(r.received_at, t.occurred_at) < :until
 ORDER BY t.occurred_at DESC;
 
--- A different payment with the same home amount whose SMS arrived within 15 minutes (A6a).
+-- A6a: the same amount reported in a *different* SMS format within 15 minutes (e.g. the bank's SMS and a
+-- UPI app's SMS). Same format is never a duplicate: a bank doesn't resend one alert, and exact repeats
+-- are dropped at ingest. Same-sender pairs are settled automatically (Duplicates.kt) before this is asked.
 selectPossibleDuplicate:
 SELECT o.id, o.counterparty_raw, o.home_amount_minor, o.occurred_at
 FROM txn t
@@ -138,6 +143,7 @@ JOIN txn o ON o.id <> t.id AND o.duplicate_of IS NULL AND o.home_amount_minor = 
 JOIN sms_raw ro ON ro.id = o.sms_id
 WHERE t.id = :id
   AND abs(ro.received_at - rt.received_at) <= 900000
+  AND rt.template_id <> ro.template_id
   AND (o.account_id IS NULL OR t.account_id IS NULL OR o.account_id = t.account_id)
   AND NOT EXISTS (
       SELECT 1 FROM dup_dismissed d
@@ -182,3 +188,22 @@ UPDATE txn SET rule_id = NULL WHERE rule_id = ?;
 -- tag_source USER keeps the classifier from re-applying the rule before the user decides.
 reopen:
 UPDATE txn SET tag_source = 'USER', reviewed_at = NULL WHERE id = ?;
+
+-- Payments still waiting for a home-currency amount (M2), by currency.
+selectNeedingRate:
+SELECT id, orig_currency, orig_amount_minor FROM txn WHERE home_amount_minor IS NULL;
+
+fillHomeAmount:
+UPDATE txn SET home_amount_minor = ?, fx_rate = ?, fx_source = 'USER_RATE' WHERE id = ?;
+
+setSuggestion:
+UPDATE txn SET suggested_kind = ?, suggest_reason = ? WHERE id = ?;
+
+-- Every counted-or-not payment that came from an SMS, for the same-day duplicate check.
+selectForDuplicateCheck:
+SELECT t.id, t.home_amount_minor, t.account_id, t.reviewed_at, t.counterparty_raw, r.sender, r.template_id, r.received_at
+FROM txn t JOIN sms_raw r ON r.id = t.sms_id
+WHERE t.duplicate_of IS NULL AND t.home_amount_minor IS NOT NULL;
+
+selectDismissedPairs:
+SELECT txn_a, txn_b FROM dup_dismissed;

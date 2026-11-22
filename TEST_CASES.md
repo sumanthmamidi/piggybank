@@ -18,6 +18,8 @@ Mark each case ✅ agree, ✏️ change, or ❌ drop.
 | A5 | The phone was off overnight and 6 bank SMS arrived. | When the app next opens (or the nightly job runs), all 6 are picked up. None are missed. |
 | A6 | The same SMS is delivered twice, or the inbox is scanned twice. | It is stored once. The transaction appears once. |
 | A6a | Two *different* SMS describe the same payment (e.g. the bank SMS and the UPI app SMS for one ₹486 Uber ride: same amount, same account, a few minutes apart). | The app flags the second as a **possible duplicate** in review: "Same as Uber ₹486 at 10:05?", with the options Duplicate / Separate payment. |
+| A6e | The same bank reports one payment twice in **two different SMS formats** (e.g. "PAYMENT ALERT" then "UPDATE: debited"; "AutoPay Success" then "Amount Spent"): same sender, amount and account, within 4 hours. | Marked as a duplicate **automatically**. The tagged copy, or the one naming the payee, or the earlier one is kept; the other is in the Duplicates list, where Undo works. An undone pair is never marked again. |
+| A6f | Several payments the same day in the **same SMS format** with the same amount (e.g. 4 × ₹10,000 ATM withdrawals a minute apart). | Never a duplicate and never asked: a bank doesn't resend one alert (the balance drops each time), and exact re-deliveries are already dropped (A6). |
 | A6b | The user marks a transaction as **Duplicate** (from review or from any list). | It's removed from every total right away, but kept in a "Duplicates" list where it can be undone. Its SMS format isn't blocked, because the format is still a valid payment format. |
 | A6c | A duplicate is undone. | It returns to the totals and the day it belongs to. |
 | A6d | The user taps "Separate payment" on a suggested duplicate. | Both stay. That pair is never suggested again. |
@@ -56,8 +58,8 @@ Mark each case ✅ agree, ✏️ change, or ❌ drop.
 
 | ID | Situation | Expected result |
 |---|---|---|
-| D1 | ₹20,000 leaves SBI ••4521 and ₹20,000 arrives in HDFC ••9910 within an hour (both are your accounts). | The debit is marked **self-transfer**: hidden, counted nowhere, listed under "Not counted". The credit SMS only helps recognise it and isn't recorded. |
-| D2 | Only the debit SMS arrives, and it names HDFC A/c ••9910, which is your own account. | Still marked self-transfer. |
+| D1 | ₹20,000 leaves SBI ••4521 and ₹20,000 arrives in HDFC ••9910 within an hour (both are your accounts). | **Suggested** as a self-transfer in review, with the reason ("Money arrived in your account ••9910"). It stays a counted spend until **you** mark it; once marked it's hidden, counted nowhere, and listed under "Not counted". The credit SMS only helps spot it and isn't recorded. |
+| D2 | Only the debit SMS arrives, and it names HDFC A/c ••9910, which is your own account. | Also suggested as a self-transfer; only the user marks it. |
 | D3 | A ₹20,000 debit to a friend's account (not yours). | **Not** a self-transfer. It goes to review. |
 | D4 | You pay ₹18,400 towards the HDFC Regalia credit card bill. | Marked **card bill payment**. Hidden and not counted, because the card purchases were counted when you swiped. |
 | D5 | You spend ₹14,300 on the card in November and pay the ₹18,200 bill on 5 Dec. | November spends include the ₹14,300 of purchases only. The 5 Dec bill payment adds nothing to December. |
