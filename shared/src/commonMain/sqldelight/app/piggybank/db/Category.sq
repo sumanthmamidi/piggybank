@@ -1,0 +1,43 @@
+-- Categories sit under one top level. Only SPENDS counts toward spends; EXCLUDED is never counted.
+CREATE TABLE category (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT    NOT NULL UNIQUE,
+    top_level         TEXT    NOT NULL CHECK (top_level IN ('SPENDS', 'INVESTMENTS', 'EXCLUDED')),
+    default_need_want TEXT    CHECK (default_need_want IN ('NEED', 'WANT')),
+    icon              TEXT,
+    sort              INTEGER NOT NULL DEFAULT 0,
+    archived          INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1))
+);
+
+-- Starter categories, created with a new database. The user can rename, add or archive.
+INSERT INTO category(name, top_level, default_need_want, sort) VALUES
+    ('Rent',              'SPENDS',      'NEED', 10),
+    ('Groceries',         'SPENDS',      'NEED', 20),
+    ('Commute',           'SPENDS',      'NEED', 30),
+    ('Bills & utilities', 'SPENDS',      'NEED', 40),
+    ('Health',            'SPENDS',      'NEED', 50),
+    ('Bank charges',      'SPENDS',      'NEED', 60),
+    ('Food delivery',     'SPENDS',      'WANT', 70),
+    ('Cafés',             'SPENDS',      'WANT', 80),
+    ('Shopping',          'SPENDS',      'WANT', 90),
+    ('Entertainment',     'SPENDS',      'WANT', 100),
+    ('Mutual fund SIP',   'INVESTMENTS', NULL,   200),
+    ('Stocks',            'INVESTMENTS', NULL,   210),
+    ('Self-transfer',     'EXCLUDED',    NULL,   300),
+    ('Card bill payment', 'EXCLUDED',    NULL,   310),
+    ('Wallet top-up',     'EXCLUDED',    NULL,   320);
+
+selectActive:
+SELECT * FROM category WHERE archived = 0 ORDER BY sort, name;
+
+selectByTopLevel:
+SELECT * FROM category WHERE archived = 0 AND top_level = ? ORDER BY sort, name;
+
+insert:
+INSERT INTO category(name, top_level, default_need_want, icon, sort) VALUES (?, ?, ?, ?, ?);
+
+selectById:
+SELECT * FROM category WHERE id = ?;
+
+selectByName:
+SELECT * FROM category WHERE name = ?;

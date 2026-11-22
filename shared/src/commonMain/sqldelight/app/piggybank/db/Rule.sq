@@ -1,0 +1,50 @@
+-- Tagging rules learned from the daily review ("Always tag X like this").
+CREATE TABLE rule (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    field               TEXT    NOT NULL CHECK (field IN ('VPA', 'MERCHANT', 'SENDER', 'ACCOUNT_PAIR', 'BODY')),
+    match_type          TEXT    NOT NULL CHECK (match_type IN ('EXACT', 'PREFIX', 'CONTAINS', 'REGEX')),
+    pattern             TEXT    NOT NULL,
+    result_kind         TEXT    NOT NULL CHECK (result_kind IN ('SPEND', 'INVESTMENT', 'SELF_TRANSFER', 'CC_BILL', 'WALLET_TOPUP')),
+    result_category_id  INTEGER REFERENCES category(id),
+    result_need_want    TEXT    CHECK (result_need_want IN ('NEED', 'WANT')),
+    always_ask          INTEGER NOT NULL DEFAULT 0 CHECK (always_ask IN (0, 1)),
+    priority            INTEGER NOT NULL DEFAULT 0,
+    hits                INTEGER NOT NULL DEFAULT 0,
+    last_hit_at         INTEGER,
+    created_from_txn_id INTEGER
+);
+
+CREATE UNIQUE INDEX rule_unique_pattern ON rule(field, match_type, pattern);
+
+selectAll:
+SELECT * FROM rule ORDER BY priority DESC, hits DESC;
+
+insert:
+INSERT INTO rule(field, match_type, pattern, result_kind, result_category_id, result_need_want, always_ask, priority, created_from_txn_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+recordHit:
+UPDATE rule SET hits = hits + 1, last_hit_at = ? WHERE id = ?;
+
+selectByKey:
+SELECT * FROM rule WHERE field = ? AND match_type = ? AND pattern = ?;
+
+selectById:
+SELECT * FROM rule WHERE id = ?;
+
+lastInsertId:
+SELECT last_insert_rowid();
+
+updateResult:
+UPDATE rule SET result_kind = ?, result_category_id = ?, result_need_want = ?, always_ask = ? WHERE id = ?;
+
+setAlwaysAsk:
+UPDATE rule SET always_ask = ? WHERE id = ?;
+
+delete:
+DELETE FROM rule WHERE id = ?;
+
+-- Rules with their category, for the Rules screen.
+selectWithCategory:
+SELECT r.*, c.name AS category_name FROM rule r LEFT JOIN category c ON c.id = r.result_category_id
+ORDER BY r.hits DESC, r.id DESC;

@@ -1,0 +1,96 @@
+-- Learned SMS formats. A signature is the SMS body with amounts, dates, refs, names and
+-- account digits masked, so every SMS in the same format maps to one row.
+CREATE TABLE sms_template (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_key     TEXT    NOT NULL,
+    signature      TEXT    NOT NULL UNIQUE,
+    verdict        TEXT    NOT NULL DEFAULT 'PENDING' CHECK (verdict IN ('WHITELIST', 'BLACKLIST', 'PENDING')),
+    field_map      TEXT,              -- JSON: where amount, account, merchant, date sit
+    example_sms_id INTEGER,
+    seen_count     INTEGER NOT NULL DEFAULT 0,
+    decided_by     TEXT    CHECK (decided_by IN ('USER', 'AUTO')),
+    decided_at     INTEGER             -- epoch millis
+);
+
+-- Every money-like SMS, kept as received.
+CREATE TABLE sms_raw (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    android_sms_id INTEGER,
+    sender         TEXT    NOT NULL,
+    body           TEXT    NOT NULL,
+    received_at    INTEGER NOT NULL,   -- epoch millis
+    body_hash      TEXT    NOT NULL UNIQUE,
+    template_id    INTEGER REFERENCES sms_template(id),
+    status         TEXT    NOT NULL DEFAULT 'CANDIDATE'
+                   CHECK (status IN ('PARSED', 'CANDIDATE', 'IGNORED', 'USER_PICKED', 'NOT_MONEY'))
+);
+
+CREATE INDEX sms_raw_received ON sms_raw(received_at);
+
+insertSms:
+INSERT OR IGNORE INTO sms_raw(android_sms_id, sender, body, received_at, body_hash, template_id, status)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+countSms:
+SELECT count(*) FROM sms_raw;
+
+selectLatestReceivedAt:
+SELECT max(received_at) FROM sms_raw;
+
+selectByStatus:
+SELECT * FROM sms_raw WHERE status = ? ORDER BY received_at DESC;
+
+insertTemplate:
+INSERT OR IGNORE INTO sms_template(sender_key, signature) VALUES (?, ?);
+
+selectTemplateBySignature:
+SELECT * FROM sms_template WHERE signature = ?;
+
+setTemplateVerdict:
+UPDATE sms_template SET verdict = ?, decided_by = ?, decided_at = ? WHERE id = ?;
+
+lastInsertId:
+SELECT last_insert_rowid();
+
+selectIdByHash:
+SELECT id FROM sms_raw WHERE body_hash = ?;
+
+bumpTemplate:
+UPDATE sms_template SET seen_count = seen_count + 1,
+       example_sms_id = coalesce(example_sms_id, :smsId)
+WHERE id = :id;
+
+selectRecentByStatus:
+SELECT id, sender, body, received_at FROM sms_raw WHERE status = ? ORDER BY received_at DESC LIMIT ?;
+
+countByStatus:
+SELECT status, count(*) AS n FROM sms_raw GROUP BY status;
+
+-- Credit SMS in a time window: used to pair a debit with money arriving in another own account.
+selectIgnoredBetween:
+SELECT id, sender, body, received_at FROM sms_raw WHERE status = 'IGNORED' AND received_at >= ? AND received_at <= ?;
+
+selectSmsById:
+SELECT * FROM sms_raw WHERE id = ?;
+
+setSmsStatus:
+UPDATE sms_raw SET status = ? WHERE id = ?;
+
+-- "Not money" on one SMS settles every other undecided SMS in the same format (C2).
+ignoreCandidatesOfTemplate:
+UPDATE sms_raw SET status = 'IGNORED' WHERE template_id = ? AND status = 'CANDIDATE';
+
+whitelistIfPending:
+UPDATE sms_template SET verdict = 'WHITELIST', decided_by = 'USER', decided_at = ?
+WHERE id = ? AND verdict = 'PENDING';
+
+selectCandidatesBetween:
+SELECT id, sender, body, received_at FROM sms_raw WHERE status = 'CANDIDATE' AND received_at >= ? AND received_at < ?
+ORDER BY received_at DESC;
+
+countCandidatesBetween:
+SELECT count(*) FROM sms_raw WHERE status = 'CANDIDATE' AND received_at >= ? AND received_at < ?;
+
+selectTemplates:
+SELECT t.*, (SELECT body FROM sms_raw r WHERE r.id = t.example_sms_id) AS example
+FROM sms_template t ORDER BY t.seen_count DESC;

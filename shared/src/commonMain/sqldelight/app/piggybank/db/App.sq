@@ -1,0 +1,57 @@
+-- One row per closed day; drives the streak.
+CREATE TABLE day_review (
+    date      TEXT    NOT NULL PRIMARY KEY,       -- 'YYYY-MM-DD'
+    closed_at INTEGER NOT NULL,
+    txn_count INTEGER NOT NULL,
+    streak    INTEGER NOT NULL
+);
+
+CREATE TABLE backup_log (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at     INTEGER NOT NULL,
+    file_name      TEXT    NOT NULL,
+    location       TEXT    NOT NULL CHECK (location IN ('LOCAL', 'DRIVE')),
+    location_uri   TEXT,
+    size_bytes     INTEGER,
+    sha256         TEXT,
+    schema_version INTEGER NOT NULL,
+    ok             INTEGER NOT NULL CHECK (ok IN (0, 1)),
+    error          TEXT
+);
+
+-- User preferences (home currency, review time, …).
+CREATE TABLE setting (
+    key   TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Internal bookkeeping (last SMS scan, install id, …).
+CREATE TABLE meta (
+    key   TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+closeDay:
+INSERT OR REPLACE INTO day_review(date, closed_at, txn_count, streak) VALUES (?, ?, ?, ?);
+
+selectDay:
+SELECT * FROM day_review WHERE date = ?;
+
+insertBackupLog:
+INSERT INTO backup_log(created_at, file_name, location, location_uri, size_bytes, sha256, schema_version, ok, error)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+putSetting:
+INSERT OR REPLACE INTO setting(key, value) VALUES (?, ?);
+
+getSetting:
+SELECT value FROM setting WHERE key = ?;
+
+putMeta:
+INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?);
+
+getMeta:
+SELECT value FROM meta WHERE key = ?;
+
+selectLatestClosed:
+SELECT * FROM day_review ORDER BY date DESC LIMIT 1;

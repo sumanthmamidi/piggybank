@@ -1,0 +1,184 @@
+-- One row per outgoing payment. Money in is never stored (income comes from the income table).
+-- Amounts are integers in the currency's smallest unit (paise, cents; JPY has none, KWD has 3 decimals).
+CREATE TABLE txn (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    sms_id            INTEGER REFERENCES sms_raw(id),
+    occurred_at       INTEGER NOT NULL,                     -- epoch millis
+    date_source       TEXT    NOT NULL CHECK (date_source IN ('SMS', 'ARRIVAL', 'USER')),
+    orig_currency     TEXT    NOT NULL,                     -- ISO 4217, as written in the SMS
+    orig_amount_minor INTEGER NOT NULL CHECK (orig_amount_minor >= 0),
+    home_amount_minor INTEGER CHECK (home_amount_minor >= 0), -- NULL until a rate is known
+    fx_rate           TEXT,                                 -- decimal string, never a float
+    fx_source         TEXT    NOT NULL CHECK (fx_source IN ('SAME', 'SMS', 'USER_RATE')),
+    refund_minor      INTEGER NOT NULL DEFAULT 0 CHECK (refund_minor >= 0),
+    account_id        INTEGER REFERENCES account(id),
+    counterparty_raw  TEXT,
+    vpa               TEXT,
+    merchant_key      TEXT,
+    kind              TEXT    NOT NULL DEFAULT 'SPEND'
+                      CHECK (kind IN ('SPEND', 'INVESTMENT', 'SELF_TRANSFER', 'CC_BILL', 'WALLET_TOPUP')),
+    category_id       INTEGER REFERENCES category(id),
+    need_want         TEXT    CHECK (need_want IN ('NEED', 'WANT')),
+    tag_source        TEXT    CHECK (tag_source IN ('RULE', 'USER', 'GUESS')),
+    rule_id           INTEGER REFERENCES rule(id),
+    reviewed_at       INTEGER,
+    note              TEXT,
+    duplicate_of      INTEGER REFERENCES txn(id),
+    duplicate_by      TEXT    CHECK (duplicate_by IN ('USER', 'AUTO')),
+    CHECK (refund_minor <= coalesce(home_amount_minor, orig_amount_minor))
+);
+
+CREATE INDEX txn_occurred ON txn(occurred_at);
+CREATE INDEX txn_unreviewed ON txn(reviewed_at) WHERE reviewed_at IS NULL;
+
+-- Pairs the user said are two separate payments, so they are never suggested as duplicates again.
+CREATE TABLE dup_dismissed (
+    txn_a INTEGER NOT NULL REFERENCES txn(id),
+    txn_b INTEGER NOT NULL REFERENCES txn(id),
+    PRIMARY KEY (txn_a, txn_b),
+    CHECK (txn_a < txn_b)
+);
+
+insert:
+INSERT INTO txn(sms_id, occurred_at, date_source, orig_currency, orig_amount_minor, home_amount_minor,
+                fx_rate, fx_source, account_id, counterparty_raw, vpa, merchant_key, kind)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+lastInsertId:
+SELECT last_insert_rowid();
+
+selectBetween:
+SELECT * FROM txn WHERE occurred_at >= :from AND occurred_at < :until ORDER BY occurred_at;
+
+-- Spends total in home currency: SPEND only, not duplicates, minus refunds.
+spendTotalBetween:
+SELECT CAST(coalesce(sum(home_amount_minor - refund_minor), 0) AS INTEGER) FROM txn
+WHERE occurred_at >= :from AND occurred_at < :until
+  AND kind = 'SPEND' AND duplicate_of IS NULL AND home_amount_minor IS NOT NULL;
+
+selectUnreviewed:
+SELECT * FROM txn WHERE reviewed_at IS NULL AND duplicate_of IS NULL ORDER BY occurred_at;
+
+tag:
+UPDATE txn SET kind = ?, category_id = ?, need_want = ?, tag_source = ?, rule_id = ?, reviewed_at = ? WHERE id = ?;
+
+markDuplicate:
+UPDATE txn SET duplicate_of = ?, duplicate_by = ? WHERE id = ?;
+
+clearDuplicate:
+UPDATE txn SET duplicate_of = NULL, duplicate_by = NULL WHERE id = ?;
+
+setRefund:
+UPDATE txn SET refund_minor = ? WHERE id = ?;
+
+-- Caller passes the smaller id first (the CHECK enforces it).
+dismissDuplicatePair:
+INSERT OR IGNORE INTO dup_dismissed(txn_a, txn_b) VALUES (?, ?);
+
+-- Newest payments for the "read from SMS" list, with the account they came from.
+selectRecentWithAccount:
+SELECT t.id, t.occurred_at, t.date_source, t.orig_currency, t.orig_amount_minor, t.home_amount_minor,
+       t.counterparty_raw, t.vpa, a.institution, a.last4, a.kind AS account_kind
+FROM txn t LEFT JOIN account a ON a.id = t.account_id
+WHERE t.duplicate_of IS NULL
+ORDER BY t.occurred_at DESC
+LIMIT ?;
+
+countAll:
+SELECT count(*) FROM txn;
+
+selectById:
+SELECT * FROM txn WHERE id = ?;
+
+-- Not yet decided by the user or a rule: the classifier may (re)tag these.
+selectForClassify:
+SELECT t.id, t.orig_currency, t.orig_amount_minor, t.home_amount_minor, t.account_id, t.counterparty_raw, t.vpa,
+       t.merchant_key, t.sms_id, r.body, r.sender, r.received_at AS sms_received_at
+FROM txn t LEFT JOIN sms_raw r ON r.id = t.sms_id
+WHERE t.reviewed_at IS NULL AND (t.tag_source IS NULL OR t.tag_source = 'GUESS') AND t.duplicate_of IS NULL;
+
+-- Review queue: undecided payments whose SMS arrived in [from, until).
+selectReviewQueue:
+SELECT t.*, r.body, r.received_at AS sms_received_at, c.name AS category_name, a.institution, a.last4, a.kind AS account_kind
+FROM txn t
+LEFT JOIN sms_raw r ON r.id = t.sms_id
+LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account a ON a.id = t.account_id
+WHERE t.reviewed_at IS NULL AND t.duplicate_of IS NULL
+  AND coalesce(r.received_at, t.occurred_at) >= :from AND coalesce(r.received_at, t.occurred_at) < :until
+ORDER BY t.occurred_at;
+
+-- Everything that happened in a period (for Today and day lists), newest first.
+selectWithDetailsBetween:
+SELECT t.*, r.body, r.received_at AS sms_received_at, c.name AS category_name, a.institution, a.last4, a.kind AS account_kind
+FROM txn t
+LEFT JOIN sms_raw r ON r.id = t.sms_id
+LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account a ON a.id = t.account_id
+WHERE t.occurred_at >= :from AND t.occurred_at < :until
+ORDER BY t.occurred_at DESC;
+
+-- Auto-tagged by a rule today (SMS arrived in [from, until)), so the user can still change them.
+selectAutoTaggedArrived:
+SELECT t.*, r.body, r.received_at AS sms_received_at, c.name AS category_name, a.institution, a.last4, a.kind AS account_kind
+FROM txn t
+LEFT JOIN sms_raw r ON r.id = t.sms_id
+LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account a ON a.id = t.account_id
+WHERE t.tag_source = 'RULE' AND t.duplicate_of IS NULL
+  AND coalesce(r.received_at, t.occurred_at) >= :from AND coalesce(r.received_at, t.occurred_at) < :until
+ORDER BY t.occurred_at DESC;
+
+-- A different payment with the same home amount whose SMS arrived within 15 minutes (A6a).
+selectPossibleDuplicate:
+SELECT o.id, o.counterparty_raw, o.home_amount_minor, o.occurred_at
+FROM txn t
+JOIN sms_raw rt ON rt.id = t.sms_id
+JOIN txn o ON o.id <> t.id AND o.duplicate_of IS NULL AND o.home_amount_minor = t.home_amount_minor
+JOIN sms_raw ro ON ro.id = o.sms_id
+WHERE t.id = :id
+  AND abs(ro.received_at - rt.received_at) <= 900000
+  AND (o.account_id IS NULL OR t.account_id IS NULL OR o.account_id = t.account_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM dup_dismissed d
+      WHERE (d.txn_a = t.id AND d.txn_b = o.id) OR (d.txn_a = o.id AND d.txn_b = t.id)
+  )
+ORDER BY o.id
+LIMIT 1;
+
+selectDuplicates:
+SELECT t.*, c.name AS category_name FROM txn t LEFT JOIN category c ON c.id = t.category_id
+WHERE t.duplicate_of IS NOT NULL ORDER BY t.occurred_at DESC;
+
+-- "Count it" (D9): back into spends, untagged, so it shows up in review for a category.
+countIt:
+UPDATE txn SET kind = 'SPEND', category_id = NULL, need_want = NULL, tag_source = NULL, rule_id = NULL, reviewed_at = NULL
+WHERE id = ?;
+
+clearDuplicatesOf:
+UPDATE txn SET duplicate_of = NULL, duplicate_by = NULL WHERE duplicate_of = ?;
+
+deleteDismissedFor:
+DELETE FROM dup_dismissed WHERE txn_a = :id OR txn_b = :id;
+
+delete:
+DELETE FROM txn WHERE id = ?;
+
+-- Re-apply a changed rule to past transactions it tagged (E6).
+selectByRule:
+SELECT id FROM txn WHERE rule_id = ?;
+
+countReviewedBySource:
+SELECT tag_source, count(*) AS n FROM txn WHERE duplicate_of IS NULL AND reviewed_at IS NOT NULL GROUP BY tag_source;
+
+selectBySmsId:
+SELECT * FROM txn WHERE sms_id = ?;
+
+-- Deleting a rule keeps the tags it gave; the transactions just stop pointing at it.
+detachRule:
+UPDATE txn SET rule_id = NULL WHERE rule_id = ?;
+
+-- F1/F8: open an auto-tagged or closed-day payment again. The tag stays as the suggestion;
+-- tag_source USER keeps the classifier from re-applying the rule before the user decides.
+reopen:
+UPDATE txn SET tag_source = 'USER', reviewed_at = NULL WHERE id = ?;

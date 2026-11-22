@@ -1,0 +1,44 @@
+-- Income the user sets up. Nothing here is read from SMS.
+CREATE TABLE income (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,                 -- "Salary", "Rent received", "Bonus"
+    amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0), -- home currency
+    schedule     TEXT    NOT NULL CHECK (schedule IN ('MONTHLY', 'ONE_OFF')),
+    from_month   TEXT    NOT NULL,                 -- 'YYYY-MM'
+    to_month     TEXT,                             -- 'YYYY-MM', NULL = open-ended
+    months_mask  INTEGER NOT NULL DEFAULT 4095,    -- bit 0 = Jan … bit 11 = Dec; 4095 = every month
+    active       INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
+);
+
+-- Monthly budget per category, in home currency.
+CREATE TABLE budget (
+    month        TEXT    NOT NULL,                 -- 'YYYY-MM'
+    category_id  INTEGER NOT NULL REFERENCES category(id),
+    amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+    PRIMARY KEY (month, category_id)
+);
+
+-- Exchange rates typed in by the user. Never fetched from the internet.
+CREATE TABLE fx_rate (
+    currency     TEXT    NOT NULL PRIMARY KEY,     -- ISO 4217
+    rate_to_home TEXT    NOT NULL,                 -- decimal string, e.g. '90.20'
+    set_at       INTEGER NOT NULL
+);
+
+insertIncome:
+INSERT INTO income(name, amount_minor, schedule, from_month, to_month, months_mask) VALUES (?, ?, ?, ?, ?, ?);
+
+selectActiveIncome:
+SELECT * FROM income WHERE active = 1 ORDER BY name;
+
+upsertBudget:
+INSERT OR REPLACE INTO budget(month, category_id, amount_minor) VALUES (?, ?, ?);
+
+selectBudgetForMonth:
+SELECT * FROM budget WHERE month = ?;
+
+upsertRate:
+INSERT OR REPLACE INTO fx_rate(currency, rate_to_home, set_at) VALUES (?, ?, ?);
+
+selectRate:
+SELECT * FROM fx_rate WHERE currency = ?;
