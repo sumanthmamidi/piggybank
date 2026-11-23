@@ -114,10 +114,35 @@ uploads them to the user's own Drive. Play's form allows marking them **optional
 - Video: a short screen recording (30–60 s): open the app → grant SMS permission → payments appear → review and tag
   one → Monthly view. Upload it to YouTube as **Unlisted** and paste the link. Use a test phone or blur amounts.
 
-**Background location (ACCESS_BACKGROUND_LOCATION)** → Play reviews this separately and approves it only when it's
-core to the app, which "Save where I paid" isn't. Expect a rejection if the bundle asks for it. Decide before uploading:
-either drop background location from the app (Save where I paid then works only while PiggyBank is open), or declare it
-and risk the review holding up the release.
+**Location (ACCESS_FINE/COARSE/BACKGROUND_LOCATION)** → Policy → App content → **Sensitive permissions →
+Location permissions** declaration. Play approves background location only when it's essential to the feature and
+the feature is clearly visible to the user, so the answers and video matter.
+
+- Feature that uses background location: **Save where I paid** (Settings → Save where I paid). Off by default.
+- Why it needs background access, to paste:
+
+  > "Save where I paid" records where an in-person card or UPI payment happened, so users can later see on a map
+  > where they spent. Payment SMS arrive within seconds of paying, almost always while PiggyBank is closed: the user is
+  > at the shop counter, not in the app. PiggyBank's SMS receiver wakes on the payment SMS and takes a single location
+  > fix at that moment. Without background access, a location could only be read the next time the user opens the
+  > app — hours later and somewhere else — so the feature would save the wrong place. Location is read once per
+  > payment SMS (never continuously), skipped for autopay, mandates, bills, subscriptions and foreign charges, stored
+  > only on the device with that payment, and never sent to the developer or third parties. The feature is opt-in,
+  > off by default, and can be turned off at any time.
+
+- Prominent disclosure: the app shows its own explanation ("PiggyBank collects location data to save where you paid,
+  even when the app is closed or not in use…") with **Continue / Not now** before Android's permission prompt.
+  It appears when the user turns on Save where I paid, or taps "Allow location" / "Allow all the time".
+- Video (30 s, YouTube **Unlisted**), showing in order:
+  1. Settings → Save where I paid → turn it on → the explanation → Continue.
+  2. Android's prompts: allow while using, then "Allow all the time".
+  3. Close the app, make a small in-person payment (or show a payment SMS arriving with the app closed).
+  4. Open the app → that payment shows the pin → Open in Maps.
+- Play Console may also ask whether location is used for ads or shared: answer **No** to both.
+
+If Google still rejects background location, the release isn't stuck: remove `ACCESS_BACKGROUND_LOCATION` from
+`androidApp/src/main/AndroidManifest.xml` (Save where I paid then works only while the app is open), build, and upload
+again.
 
 ## 7. Store listing (Grow → Store presence → Main store listing)
 

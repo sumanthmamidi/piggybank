@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -17,6 +18,10 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -81,6 +86,9 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier, header: @Compo
 /** Opt-in: attach the phone's location to payment SMS as they arrive. */
 @Composable
 internal fun SavePlacesCard(s: UiState, c: AppController) {
+    // Google Play's prominent disclosure: explain background location before Android's permission prompt.
+    var disclose by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val withDisclosure = { then: () -> Unit -> if (s.placeAccess == PlaceAccess.ALWAYS) then() else disclose = then }
     PiggyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -89,21 +97,46 @@ internal fun SavePlacesCard(s: UiState, c: AppController) {
                     "Stays on this phone; Open in Maps hands the spot to your maps app.",
                     color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             }
-            PiggySwitch(s.savePlaces, { c.setSavePlaces(it) })
+            PiggySwitch(s.savePlaces, { on -> if (on) withDisclosure { c.setSavePlaces(true) } else c.setSavePlaces(false) })
         }
         if (s.savePlaces) when (s.placeAccess) {
             PlaceAccess.ALWAYS -> Text("On for new payments, even with the app closed.", color = Piggy.Invest, style = MaterialTheme.typography.bodySmall)
             PlaceAccess.WHILE_OPEN -> {
                 Text("Only works while PiggyBank is open. Choose \"Allow all the time\" so it works when the SMS arrives with the app closed.",
                     color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = c::requestPlaceAccess) { Text("Allow all the time", color = Piggy.Accent) }
+                TextButton(onClick = { withDisclosure(c::requestPlaceAccess) }) { Text("Allow all the time", color = Piggy.Accent) }
             }
             PlaceAccess.NONE -> {
                 Text("Location access is off, so nothing is saved.", color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = c::requestPlaceAccess) { Text("Allow location", color = Piggy.Accent) }
+                TextButton(onClick = { withDisclosure(c::requestPlaceAccess) }) { Text("Allow location", color = Piggy.Accent) }
             }
         }
     }
+    disclose?.let { then -> LocationDisclosure(onDismiss = { disclose = null }, onContinue = { disclose = null; then() }) }
+}
+
+@Composable
+internal fun LocationDisclosure(onDismiss: () -> Unit, onContinue: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { PiggyIcon(PiggyIcons.Pin, Piggy.Ink, 28.dp) },
+        title = { Text("Use your location?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("PiggyBank collects location data to save where you paid, even when the app is closed or not in use.",
+                    color = Piggy.Ink, fontWeight = FontWeight.Bold)
+                Text("When a payment SMS arrives, PiggyBank notes your phone's location once and keeps it with that payment, " +
+                    "so you can see it on a map later. It's stored only on this phone and is never sent to the developer. " +
+                    "It's included in your backups, including Google Drive if you turn that on.",
+                    color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+                Text("Android asks next. Choose \"Allow all the time\" for it to work with the app closed. " +
+                    "You can turn this off here at any time.",
+                    color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onContinue) { Text("Continue", color = Piggy.Ink, fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now", color = Piggy.Muted) } },
+    )
 }
 
 /** M4: local backups to Documents/PiggyBank, nightly and on demand, and restore. */

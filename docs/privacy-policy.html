@@ -45,8 +45,10 @@ turns them into a list of payments, and helps you tag them into categories and b
 <h2>Location (optional, off by default)</h2>
 <ul>
   <li>If you turn on <strong>Save where I paid</strong>, PiggyBank notes your phone's approximate position when an in-person payment SMS arrives,
-  so you can later see where a payment happened.</li>
-  <li>The location is stored only on your phone, next to that payment. "Open in Maps" hands that one spot to the maps app you choose.</li>
+  so you can later see where a payment happened.
+  Because payment SMS usually arrive while the app is closed, this uses <strong>background location</strong>: the location
+  is read once when the payment SMS arrives, not continuously.</li>
+  <li>The location is stored only on your phone, next to that payment, and is included in your backups. "Open in Maps" hands that one spot to the maps app you choose.</li>
   <li>You can turn this off at any time, and remove the saved place from any payment.</li>
 </ul>
 

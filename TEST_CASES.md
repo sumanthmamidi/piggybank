@@ -152,8 +152,8 @@ Setup: SMS history was imported on first run; those payments wait in Catch-up, n
 
 | ID | Situation | Expected result |
 |---|---|---|
-| P1 | Fresh install. | Off. Nothing about location is asked until the user turns it on (Rules → "Save where I paid"). |
-| P2 | The user turns it on. | Android asks for location while in use, then "Allow all the time". With only "while in use", the card says it works only while the app is open and offers "Allow all the time". |
+| P1 | Fresh install. | Off. Nothing about location is asked until the user turns it on (Settings → "Save where I paid"). |
+| P2 | The user turns it on. | First PiggyBank's own explanation (Google Play's prominent disclosure): it collects location to save where you paid, even when the app is closed or not in use; Continue / Not now. "Not now" leaves it off and asks Android nothing. After Continue, Android asks for location while in use, then "Allow all the time". "Allow location" and "Allow all the time" on the card show the same explanation first; with "all the time" already granted, no explanation is shown. With only "while in use", the card says it works only while the app is open and offers "Allow all the time". |
 | P3 | A card swipe at a café; the SMS arrives within seconds. | The phone's location is saved with that payment. Today shows a 📍; tapping shows the coordinates and accuracy, "Open in Maps" and "Remove". |
 | P4 | Autopay, e-mandate, subscription, bill payment, EMI, insurance or scheduled payment SMS. | No location is saved. |
 | P5 | A foreign-currency charge. | No location is saved. |
