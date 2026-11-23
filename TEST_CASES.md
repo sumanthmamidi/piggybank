@@ -5,6 +5,9 @@ Amounts and accounts are examples. "Spends" always means Needs + Wants only.
 
 Mark each case ✅ agree, ✏️ change, or ❌ drop.
 
+Cases added after M3 (E10–E12, R, P, I8–I9, J9–J10, K5–K6) describe what is already built
+and covered by unit tests; they were written on 23 Nov 2026.
+
 ---
 
 ## A. Reading SMS
@@ -85,6 +88,9 @@ Mark each case ✅ agree, ✏️ change, or ❌ drop.
 | E7 | Two rules match one payment. | The more specific rule wins (an exact UPI ID beats a name match). |
 | E8 | A payment is tagged Investment. | No Need/Want choice is shown; investments sit outside spends. |
 | E9 | The user deletes a category that has transactions. | The app asks where to move them. Nothing is lost silently. |
+| E10 | The category the user wants isn't listed on a review card. | "+ New category" opens a short form: name, and Need/Want for a spend (investments don't ask). "Add" saves it and selects it on that card; it then appears on every card and in budgets. |
+| E11 | The typed name already exists in any capitals ("pets" vs "Pets"). | The existing category is used; no copy is made. An archived one comes back. |
+| E12 | The name is already used under another group (e.g. "Self-transfer" for a spend). | The form says where it's used and "Add" stays off. Names are trimmed and limited to 30 characters. |
 
 ## F. End-of-day review
 
@@ -125,6 +131,37 @@ Setup: November has a ₹90,000 spends budget, of which ₹25,000 is fixed rent.
 | H9 | Browsing to October with the previous-month arrow. | Shows October's final numbers. It's read-only unless the user edits a transaction. |
 | H10 | The user marks a ₹612 refund on a Swiggy spend (B6). | Food delivery spend goes down by ₹612, but never below ₹0. |
 
+## R. Catch-up (imported history)
+
+Setup: SMS history was imported on first run; those payments wait in Catch-up, never in a daily review.
+
+| ID | Situation | Expected result |
+|---|---|---|
+| R1 | First run: "How far back should PiggyBank read?" | Choices are 1, 3, 6 and 12 months. |
+| R2 | More than 10 payments in Catch-up, some with a category already guessed. | A "Tag all N identified" card appears. After a confirm, each guessed payment is tagged as shown. No rules are saved, so new payments to those payees are still asked. |
+| R3 | Tag all identified, with possible self-transfers, possible duplicates, payments needing a rate and payments to people in Catch-up. | All of those are left in Catch-up for the user. |
+| R4 | Filter → "Tag everything under ₹300" with Cafés · Want picked. | The sheet shows the live count and total under ₹300 (strictly under). After a confirm, they're tagged Cafés · Want; no rules are saved. The slider steps are ₹50 to ₹5,000. |
+| R5 | Same as R4, with possible transfers, duplicates and foreign payments without a rate under ₹300. | Those are left out. |
+| R6 | Filter → period changed from 3 months to 6 months. | Older SMS are read from the inbox; new payments join Catch-up; nothing is removed or doubled. |
+| R7 | Filter → period changed from 3 months to 1 month. | Before applying, it says how many untagged payments older than 1 month will be removed. Only untagged ones go (with their SMS); tagged payments and today's review are never touched. |
+| R8 | Filter → Clear. | All untagged Catch-up payments are removed; Catch-up says "Catch-up cleared" and the Filter offers a period again. |
+| R9 | After R7 or R8, a longer period is picked. | The removed payments are read back from the inbox, untagged, as long as the SMS are still on the phone. |
+| R10 | An SMS format's example message was among the removed SMS. | The Rules screen still opens (this crashed once); the format points at another of its SMS, or none. |
+
+## P. Saved places ("Save where I paid")
+
+| ID | Situation | Expected result |
+|---|---|---|
+| P1 | Fresh install. | Off. Nothing about location is asked until the user turns it on (Rules → "Save where I paid"). |
+| P2 | The user turns it on. | Android asks for location while in use, then "Allow all the time". With only "while in use", the card says it works only while the app is open and offers "Allow all the time". |
+| P3 | A card swipe at a café; the SMS arrives within seconds. | The phone's location is saved with that payment. Today shows a 📍; tapping shows the coordinates and accuracy, "Open in Maps" and "Remove". |
+| P4 | Autopay, e-mandate, subscription, bill payment, EMI, insurance or scheduled payment SMS. | No location is saved. |
+| P5 | A foreign-currency charge. | No location is saved. |
+| P6 | Imported history, or an SMS that arrived more than 3 minutes ago. | No location is saved. |
+| P7 | The phone's last location is more than 3 minutes old and no fresh one comes. | No location is saved, rather than a wrong one. |
+| P8 | "Open in Maps". | The point is handed to the phone's maps app; PiggyBank itself makes no network call and shows no place names. |
+| P9 | "Remove" on a location, or the payment itself is deleted ("Not a payment", catch-up removal). | The location is gone too. |
+
 ## M. Multiple currencies
 
 Setup: home currency is INR, chosen at first launch. All budgets, income and totals are in the home currency.
@@ -132,7 +169,7 @@ Setup: home currency is INR, chosen at first launch. All budgets, income and tot
 | ID | Situation | Expected result |
 |---|---|---|
 | M1 | "USD 25.00 spent on HDFC Card x4421 at AWS. INR equivalent 2,113.40". | Stored as USD 25.00 **and** ₹2,113.40. Totals use ₹2,113.40. The list shows "$25.00 · ₹2,113". |
-| M2 | "EUR 40.00 spent on card x4421 at ZARA PARIS" with no INR amount. | Stored as EUR 40.00. The review card asks for the ₹ amount, pre-filled from the last EUR rate the user entered. Until then it shows as "₹ amount needed" and is left out of totals. |
+| M2 | "EUR 40.00 spent on card x4421 at ZARA PARIS" with no INR amount. | Stored as EUR 40.00. The review card shows "€40.00" (never ₹0) and asks "1 EUR = ₹ ___", pre-filled from the last EUR rate, with a live ₹ preview. Confirm stays off until a rate is entered; confirming saves the rate and fills every waiting EUR payment. Until then it is left out of totals, and rate cards sort first. |
 | M3 | The user enters a rate for EUR once ("1 EUR = ₹90.20"). | The next EUR payment is filled in with that rate automatically, and it can still be changed. No exchange rates are ever fetched from the internet. |
 | M4 | Currencies with different decimals: JPY 1,200 (no decimals), KWD 3.500 (3 decimals). | Stored and shown correctly: ¥1,200 and KWD 3.500, not ¥12.00 or KWD 3.50. |
 | M5 | Symbols and codes: "$", "US$", "USD", "€", "EUR", "AED", "SGD". | All recognised as the right currency. A bare "$" with no other clue is treated as USD and flagged in review to confirm. |
@@ -147,11 +184,13 @@ Setup: home currency is INR, chosen at first launch. All budgets, income and tot
 |---|---|---|
 | I1 | The phone is on overnight with normal battery. | One backup file is created around 2 AM in `Documents/PiggyBank/` (and on Drive, if turned on). |
 | I2 | Battery is very low at 2 AM. | The backup waits and runs once the battery is OK. It runs at most once per day. |
-| I3 | 30 days of nightly backups. | Only the last 7 daily, 4 weekly and 3 monthly files are kept; older ones are deleted automatically. |
+| I3 | Months of nightly backups. | Kept: the newest 7 daily files, then one per week for the 4 weeks before them, then one per month for the 3 months before those (weeks and months already covered aren't counted twice). Older ones are deleted automatically, on the phone and on Drive. |
 | I4 | The Drive upload fails (no internet). | The local backup still succeeds. Drive retries the next night, and a small banner says "Drive backup pending". |
 | I5 | Backup fails 2 nights in a row. | A visible warning on Today. |
 | I6 | "Back up now" in Settings. | A backup is made immediately, with the time shown. |
-| I7 | The backup contents. | Every transaction, raw SMS, SMS format, rule, category, budget, income schedule, duplicate mark, currency rate, review history and streak. |
+| I7 | The backup contents. | Every transaction, raw SMS, SMS format, rule, category, budget, income schedule, duplicate mark, currency rate, review history, streak and saved place. |
+| I8 | "Back up now" twice on the same day. | Still one file for that day (`piggybank-YYYY-MM-DD.pbk`), holding the latest data. |
+| I9 | A backup file is opened. | It carries a manifest (format, schema and app version, date, row counts, SHA-256) and the database; a changed byte, a cut-short file or a file from a newer app version is rejected. |
 
 ## J. Restore after reinstall
 
@@ -160,20 +199,24 @@ Setup: home currency is INR, chosen at first launch. All budgets, income and tot
 | J1 | Uninstall, reinstall, choose "Restore from Google Drive", pick the same Google account. | The newest backup is found automatically and the full history is restored: everything looks as it did before. |
 | J2 | Reinstall, choose local restore. | The folder picker opens already at `Documents/PiggyBank`. After one tap on "Use this folder", the newest backup is restored. |
 | J3 | The newest backup file is damaged. | The app skips it, restores the next-newest valid one and says which date it restored. |
-| J4 | A Drive backup with a passphrase, and the wrong passphrase is entered. | A clear error. Retrying is allowed. Nothing is overwritten. |
+| J4 | A Drive backup with a passphrase, and the wrong passphrase is entered. | A clear error. Retrying is allowed. Nothing is overwritten. **Not built yet:** Drive copies are not encrypted for now. |
 | J5 | A backup from an older app version. | It's upgraded to the current format and restored without losing data. |
 | J6 | SMS that arrived after the backup's date. | Read in after restore, with no duplicates of ones already in the backup. |
 | J7 | Restoring on a different, new phone. | Works the same, through Drive or by copying the `PiggyBank` folder. |
 | J8 | No backup found anywhere. | The app says so and offers a fresh start with an SMS history import. |
+| J9 | A valid backup is found. | Before anything changes, it shows the backup's date and how many payments, SMS and rules it holds. Cancel leaves the phone as it was; Restore replaces everything and restarts the app. |
+| J10 | After a reinstall, the user restored from `Documents/PiggyBank` with "Use this folder". | Nightly backups keep writing to and pruning that same folder (through the granted access), with no "(1)" copies. |
 
 ## K. Privacy
 
 | ID | Situation | Expected result |
 |---|---|---|
-| K1 | Drive backup is off. | The app makes zero network connections, checked with a network monitor during a full day of use. |
-| K2 | Drive backup is on. | The only network traffic goes to Google Drive, and only to the app's hidden folder. |
+| K1 | Drive backup is off. | The app makes zero network connections, checked with a network monitor during a full day of use. Today says "Offline · all data stays on this phone". |
+| K2 | Drive backup is on. | The only network traffic goes to Google Drive, and only to the app's hidden folder (`drive.appdata` scope). Today says only the nightly backup goes online. |
 | K3 | Android's own system backup. | Doesn't copy PiggyBank's data anywhere. |
 | K4 | Another app on the phone. | Can't read PiggyBank's database. Only the user-visible backup folder is readable, by apps the user allows. |
+| K5 | The build. | Fails if any source file other than `backup/DriveClient.kt` uses a network API (`verifyNetworkUse`). |
+| K6 | The build. | Fails if the merged manifest asks for a permission not on the allowlist (`verifyPermissions`). WorkManager's network-state and foreground-service permissions are removed. |
 
 ---
 

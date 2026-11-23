@@ -13,7 +13,7 @@ review, Monthly review, Tagging rules).
 
 | Requirement | How the app guarantees it |
 |---|---|
-| No data leaves the device | Nothing leaves the device unless the user turns on Google Drive backup. The `INTERNET` permission exists **only** for that. The single network client is the Drive module, limited to the hidden `drive.appdata` folder. No analytics, crash reporting or ad SDKs; a CI check fails the build if any other library opens network connections. |
+| No data leaves the device | Nothing leaves the device unless the user turns on Google Drive backup. The `INTERNET` permission exists **only** for that. The single network client is the Drive module, limited to the hidden `drive.appdata` folder. No analytics, crash reporting or ad SDKs. The build fails if any source file other than `backup/DriveClient.kt` uses a network API (`verifyNetworkUse`), or if the manifest asks for a permission off the allowlist (`verifyPermissions`). |
 | Android auto-backup must not copy data to Google | `android:allowBackup="false"` and `dataExtractionRules` excluding everything. We run our own backup instead (§6). |
 | Drive backup is possible | It works the way WhatsApp does: sign in with Google, then the backup goes to the app's hidden Drive folder, and a reinstall finds it automatically (§6). |
 | Structured data | A single SQLite database with a versioned schema and explicit migrations (§4). Money is stored as integers in the currency’s smallest unit (paise, cents), never floats. The database is **not encrypted**; it lives in app-private storage on the user's own device. |
@@ -34,8 +34,8 @@ Why this over Flutter or React Native:
 |---|---|
 | UI | Compose Multiplatform, Material 3 (custom theme from the mockups) |
 | Database | **SQLDelight** (SQLite; type-safe queries; KMP; SQL-first schema with migration files) |
-| Encryption | None for the DB. Drive backups optionally encrypted with AES-GCM and a passphrase (default on, because that copy leaves the phone) |
-| Google Drive | Credential Manager / Google Sign-In for the account, Drive REST API v3 with the `drive.appdata` scope (Ktor client in `shared/`, so iOS can reuse it) |
+| Encryption | None for the DB. Drive backups optionally encrypted with AES-GCM and a passphrase (default on, because that copy leaves the phone). **Not built yet:** Drive copies are currently unencrypted, protected by the user's Google account. |
+| Google Drive | Google Identity `AuthorizationClient` for the `drive.appdata` scope (Android OAuth client matched by package + SHA-1; no client ID or secret in the app), Drive REST API v3 over `HttpURLConnection` in `androidApp/backup/DriveClient.kt`. Moving it to a Ktor client in `shared/` is left for iOS (M6). |
 | Background work | Android `WorkManager`; iOS `BGTaskScheduler` later |
 | DI | Koin (KMP) |
 | Dates/money | `kotlinx-datetime`; a `Money(paise: Long)` value class |
@@ -187,10 +187,14 @@ is written to a fixed path the app always uses.
 
 **Nightly rolling backup (both destinations)**
 - `PeriodicWorkRequest` every 24 h, aiming for about 02:00. Constraint: battery not low.
-- Steps: `VACUUM INTO` a consistent DB snapshot → zip with `manifest.json`
-  (schema_version, app_version, created_at, row counts, sha256) → write
-  `piggybank-YYYY-MM-DD.pbk`.
-- Rolling retention: keep the last **7 daily + 4 weekly + 3 monthly** files and delete older ones.
+- Steps: `VACUUM INTO` a consistent DB snapshot → write `piggybank-YYYY-MM-DD.pbk`:
+  a magic line, a one-line JSON manifest (format, schema_version, app_version,
+  created_at, row counts, db size, sha256), then the database bytes. No zip, so the
+  format code is plain Kotlin in `shared/backup` and iOS can read it unchanged.
+  Running again the same day replaces that day's file.
+- Rolling retention: keep the newest **7 daily**, then one per week for the **4 weeks** before them,
+  then one per month for the **3 months** before those (weeks/months already covered don't count
+  twice), and delete the rest — on the phone and on Drive.
   Each run is logged in `backup_log`. If a run fails, the app shows a gentle banner the next day.
 - Manual "Back up now" in Settings.
 
@@ -219,6 +223,13 @@ is written to a fixed path the app always uses.
   then the app finds the newest valid backup, restores it and keeps the folder
   permission for future nightly backups.
 - The user can still pick another folder or a single file ("Restore from file…").
+- After that pick, the app keeps the folder grant and writes and prunes nightly backups through it,
+  because MediaStore can't touch files the previous install created.
+
+**Restoring (built)**
+- The newest valid backup is used; damaged ones are skipped and named (J3). The user sees its date
+  and counts and must confirm. The database is checked (`quick_check`), staged, and swapped in at the
+  next app start, before anything opens it; the app restarts itself.
 
 **After any restore**
 - A schema migration runs if the backup came from an older app version.
@@ -237,7 +248,8 @@ is written to a fixed path the app always uses.
    and projection; burn-up vs pace; daily vs allowance; Needs/Wants/Investments bars
    with a pace marker; categories sorted by risk; budget move suggestion; "Not counted" list.
 4. **Rules**: auto-tag rate, filters (Spends / Investments / Salary / Hidden), edit or
-   delete rules, "always ask" list, own accounts.
+   delete rules, "always ask" list, own accounts. Until a Settings screen exists, Rules also
+   holds **Backup** (nightly switch, Back up now, Restore, Google Drive) and **Save where I paid**.
 5. **Settings**: **Income** (salary and other recurring or one-off incomes, each with an
    amount, schedule and applicable months), home currency (at first launch) and saved
    exchange rates, budgets per category, Duplicates list, review reminder time, backup
@@ -251,7 +263,7 @@ is written to a fixed path the app always uses.
 | M1 | SMS ingest (live + inbox catch-up + history import), amount filter, template signatures, generic parser, raw + txn storage | Your last 3 months import; every money SMS is either parsed or listed as a candidate |
 | M2 | Today + End-of-day review + rules learning + self-transfer / CC-bill detection + candidate picker | You can close a full day in under a minute |
 | M3 | Monthly review: budgets, income schedules, savings, multi-currency, charts | Numbers reconcile against your bank statement for one month |
-| M4 | Nightly rolling backup to `Documents/PiggyBank` + Google Drive `appDataFolder`; restore on reinstall | Uninstall → reinstall → sign in with Google (or confirm the suggested folder) → full history back |
+| M4 | Nightly rolling backup to `Documents/PiggyBank` + Google Drive `appDataFolder`; restore on reinstall | Uninstall → reinstall → sign in with Google (or confirm the suggested folder) → full history back. **Status (23 Nov 2026):** local backup and Drive upload verified on the phone; restore (folder, file, Drive) built but not yet run end to end; Drive passphrase not built. |
 | M5 | Polish: reminder notification, streaks, app lock, home-screen widget | Daily use for 2 weeks without friction |
 | M6 | iOS target: Shortcuts/App Intent ingestion, Files-based backup | Same DB and backup restores on iPhone |
 
@@ -301,3 +313,21 @@ is written to a fixed path the app always uses.
   two different formats within 4 hours → marked automatically. Same format → never a duplicate, never
   asked (checked on real SMS: 4 ATM withdrawals a minute apart are real). Different senders within
   15 minutes → asked in review. Undoing one records the pair as separate so it is never re-marked.
+- **Decided (23 Nov 2026):** foreign payments without a ₹ amount show their original amount and ask
+  for "1 USD = ₹ ___" on the review card; confirming saves the rate and fills every waiting payment in
+  that currency.
+- **Decided (23 Nov 2026):** Catch-up shortcuts never save rules: "Tag all identified" (shown with more
+  than 10 waiting) confirms existing guesses, and the Filter's "Tag everything under ₹X" tags small
+  payments as one category. Both leave possible transfers, duplicates and payments needing a rate
+  for the user.
+- **Decided (23 Nov 2026):** the catch-up period can be changed later (1/3/6/12 months) or cleared.
+  Shortening removes only untagged payments and their SMS rows, so a longer period reads them back from
+  the inbox; tagged payments are never removed. First import also offers 1 month.
+- **Decided (23 Nov 2026):** categories can be added from a review card (spend with Need/Want, or
+  investment). Names are unique ignoring case.
+- **Decided (23 Nov 2026):** "Save where I paid" is opt-in. When a payment SMS arrives, the phone's
+  location (OS LocationManager, no Play Services location, no geocoding) is stored for in-person-looking
+  spends only, in a side table. It is never fetched for history. "Open in Maps" hands the point to
+  the maps app; the app shows coordinates, not place names, so it never goes online for this.
+- **Decided (23 Nov 2026):** Drive backup ships without the passphrase first; encryption is the next
+  Drive step. The app logo (`branding/`) is a pink piggy bank with an orange coin on the ink colour.
