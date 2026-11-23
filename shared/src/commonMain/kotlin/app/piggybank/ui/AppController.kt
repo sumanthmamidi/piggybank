@@ -55,6 +55,10 @@ interface Platform {
     fun pickRestore(fromFile: Boolean)
     /** Replaces this phone's data with the backup found and restarts the app. */
     fun confirmRestore()
+    /** Google sign-in for the drive.appdata scope, then a first upload. */
+    fun connectDrive()
+    /** Sign in (if needed) and look for the newest backup on Drive; answers through [AppController.restoreFound]. */
+    fun restoreFromDrive()
 }
 
 /** A valid backup the user can restore (J1–J3). */
@@ -67,6 +71,11 @@ data class BackupUi(
     /** Shown on Today after two failed runs in a row (I5). */
     val failing: Boolean,
     val lastError: String?,
+    /** The Google account Drive backups go to; null when Drive backup is off. */
+    val driveAccount: String?,
+    val driveLast: String?,
+    /** I4: the last Drive upload failed; the next night tries again. */
+    val drivePending: String?,
 )
 
 enum class PlaceAccess { NONE, WHILE_OPEN, ALWAYS }
@@ -337,10 +346,21 @@ class AppController(
     }
 
     fun confirmRestore() = platform.confirmRestore()
+    fun connectDrive() = platform.connectDrive()
+    fun disconnectDrive() = act { backups.driveAccount = null }
+    fun restoreFromDrive() { restoreMessage = null; platform.restoreFromDrive() }
+
+    /** Called by the platform after Google sign-in: Drive is on for [email], then a backup runs. */
+    fun driveConnected(email: String?, error: String?) {
+        if (email == null) { restoreFound(null, error ?: "Google Drive wasn't connected"); return }
+        act { backups.driveAccount = email }
+        backUpNow()
+    }
     fun dismissRestore() { restoreOffer = null; restoreMessage = null; refresh() }
 
     private fun backupUi(zone: TimeZone, today: LocalDate): BackupUi {
         val st = backups.status()
+        val drive = backups.status("DRIVE")
         return BackupUi(
             nightly = backups.nightly,
             folder = "Documents/PiggyBank",
@@ -349,6 +369,9 @@ class AppController(
             },
             failing = st.failingNights >= 2,
             lastError = st.lastError,
+            driveAccount = backups.driveAccount,
+            driveLast = drive.lastOkAt?.let { at -> whenLabel(at, zone, today) + (drive.lastOkSize?.let { " · ${sizeLabel(it)}" } ?: "") },
+            drivePending = drive.lastError?.takeIf { backups.driveAccount != null },
         )
     }
 

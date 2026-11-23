@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -127,6 +128,24 @@ private fun BackupCard(s: UiState, c: AppController) {
             PrimaryButton(if (s.backingUp) "Backing up…" else "Back up now", Modifier.weight(1f), enabled = !s.backingUp) { c.backUpNow() }
             SecondaryButton("Restore…", Modifier.weight(1f)) { c.restore(fromFile = false) }
         }
-        TextButton(onClick = { c.restore(fromFile = true) }) { Text("Restore from a file…", color = Piggy.Accent) }
+        Row {
+            TextButton(onClick = { c.restore(fromFile = true) }) { Text("From a file…", color = Piggy.Accent) }
+            TextButton(onClick = c::restoreFromDrive) { Text("From Google Drive…", color = Piggy.Accent) }
+        }
+
+        HorizontalDivider(color = Piggy.Line)
+        Text("Google Drive (optional)", fontWeight = FontWeight.Bold, color = Piggy.Ink)
+        if (b.driveAccount == null) {
+            Text("Also keep each night's backup in your Google Drive, in a hidden folder only PiggyBank can open. " +
+                "It's the only thing PiggyBank ever sends online.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+            SecondaryButton("Connect Google Drive", Modifier.fillMaxWidth()) { c.connectDrive() }
+        } else {
+            Text(b.driveAccount + " · " + (b.driveLast?.let { "last upload $it" } ?: "no upload yet"), color = Piggy.Ink, style = MaterialTheme.typography.bodySmall)
+            b.drivePending?.let { Text("Drive backup pending: $it", color = Piggy.Accent, style = MaterialTheme.typography.bodySmall) }
+            Row {
+                TextButton(onClick = c::connectDrive) { Text("Reconnect", color = Piggy.Accent) }
+                TextButton(onClick = c::disconnectDrive) { Text("Turn off Drive", color = Piggy.Muted) }
+            }
+        }
     }
 }

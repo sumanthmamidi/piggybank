@@ -18,6 +18,11 @@ import app.piggybank.ui.App
 import app.piggybank.ui.AppController
 import app.piggybank.backup.BackupFolder
 import app.piggybank.backup.Backups
+import app.piggybank.backup.BackupService
+import app.piggybank.backup.DriveClient
+import androidx.activity.result.IntentSenderRequest
+import com.google.android.gms.auth.api.identity.AuthorizationResult
+import com.google.android.gms.auth.api.identity.Identity
 import app.piggybank.ui.PlaceAccess
 import app.piggybank.ui.RestoreOffer
 import kotlinx.coroutines.Dispatchers
@@ -91,6 +96,46 @@ class MainActivity : ComponentActivity(), Platform {
             startActivity(Intent.makeRestartActivityTask(componentName))
             Runtime.getRuntime().exit(0)
         }
+    }
+
+    // ---- Google Drive (optional) ----
+    /** What to do once Google sign-in hands back a token. */
+    private var onDriveToken: ((String?, String?) -> Unit)? = null
+
+    private val driveConsent = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val r = runCatching { Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(res.data) }
+        deliverToken(r.getOrNull()?.accessToken, r.exceptionOrNull()?.message ?: "Google sign-in was cancelled")
+    }
+
+    private fun deliverToken(token: String?, error: String?) {
+        val next = onDriveToken ?: return
+        onDriveToken = null
+        next(token, if (token == null) error else null)
+    }
+
+    /** Asks Google for the drive.appdata scope, showing the account picker and consent only when needed. */
+    private fun withDriveToken(email: String?, then: (String?, String?) -> Unit) {
+        onDriveToken = then
+        Identity.getAuthorizationClient(this).authorize(DriveClient.request(email))
+            .addOnSuccessListener { r: AuthorizationResult ->
+                val pending = r.pendingIntent
+                if (r.hasResolution() && pending != null) driveConsent.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                else deliverToken(r.accessToken, "Google didn't return access")
+            }
+            .addOnFailureListener { e -> deliverToken(null, "Google sign-in failed: ${e.message}") }
+    }
+
+    override fun connectDrive() = withDriveToken(null) { token, error ->
+        if (token == null) { controller.driveConnected(null, error); return@withDriveToken }
+        lifecycleScope.launch {
+            val email = withContext(Dispatchers.IO) { DriveClient(token).email() }
+            controller.driveConnected(email, if (email == null) "Couldn't reach Google Drive" else null)
+        }
+    }
+
+    override fun restoreFromDrive() = withDriveToken(null) { token, error ->
+        if (token == null) controller.restoreFound(null, error)
+        else offer { Backups.newestValidOnDrive(token) }
     }
 
     override fun backUpNow(): String = Backups.backUpNow(this, db).getOrThrow()

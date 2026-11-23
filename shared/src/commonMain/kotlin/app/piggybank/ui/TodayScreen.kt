@@ -46,6 +46,9 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
             Text(s.backup.lastError ?: "The last two backups didn't finish.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = c::backUpNow) { Text("Try again now", color = Piggy.Accent) }
         }
+        s.backup.drivePending?.let {
+            Text("Drive backup pending · tries again tonight", color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
+        }
 
         // G1: spends today, split by Need/Want; investments shown apart, never inside "spent".
         PiggyCard(dark = true) {
@@ -129,7 +132,11 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
                 if (!s.syncing) TextButton(onClick = c::syncNow) { Text("Check now", color = Piggy.Accent) }
             }
         }
-        Text("No network permission · all data stays on this phone", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (s.backup.driveAccount == null) "Offline · all data stays on this phone"
+            else "Only the nightly backup goes online, to your Google Drive",
+            color = Piggy.Muted, style = MaterialTheme.typography.bodySmall,
+        )
     }
     selected?.let { t ->
         TxnDialog(t, s.home, onDismiss = { selected = null },
@@ -179,7 +186,7 @@ private fun SmsSetupCard(s: UiState, c: AppController) {
                 Text("Read your bank SMS", fontWeight = FontWeight.Bold, color = Piggy.Ink)
                 Text(
                     "PiggyBank reads SMS that mention an amount, from any bank, card or wallet, to build your spends. " +
-                        "Messages are read on this phone only; the app has no internet access.",
+                        "Messages are read on this phone only. Nothing is sent anywhere unless you turn on Google Drive backup.",
                     color = Piggy.Muted,
                 )
                 if (s.access == SmsAccess.DENIED) {
@@ -194,7 +201,11 @@ private fun SmsSetupCard(s: UiState, c: AppController) {
                     if (s.access == SmsAccess.DENIED) SecondaryButton("Open settings") { c.openAppSettings() }
                 }
                 // J1/J2: on a new install, bring the old history back first.
-                TextButton(onClick = { c.restore(fromFile = false) }) { Text("Restore a backup instead", color = Piggy.Accent) }
+                Text("New phone or reinstall? Bring your history back first:", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+                Row {
+                    TextButton(onClick = { c.restore(fromFile = false) }) { Text("From Documents/PiggyBank", color = Piggy.Accent) }
+                    TextButton(onClick = c::restoreFromDrive) { Text("From Google Drive", color = Piggy.Accent) }
+                }
             }
             SmsAccess.GRANTED_NO_IMPORT -> {
                 Text("Import past SMS", fontWeight = FontWeight.Bold, color = Piggy.Ink)

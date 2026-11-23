@@ -99,4 +99,20 @@ class BackupTest {
     }
 
     private fun createTempDirectory(): File = kotlin.io.path.createTempDirectory("pbk").toFile().also { it.deleteOnExit() }
+
+    /** I4: Drive runs are logged apart, so a failed upload shows as pending without touching local status. */
+    @Test fun driveStatusIsTrackedApartFromLocal() {
+        val db = createDatabase(app.piggybank.data.DriverFactory().create())
+        val svc = BackupService(db)
+        assertNull(svc.driveAccount)
+        svc.driveAccount = "someone@example.com"
+        assertEquals("someone@example.com", svc.driveAccount)
+        svc.log(1_000, "piggybank-2026-11-23.pbk", "LOCAL", "content://x", 10, null, 1, null)
+        svc.log(1_001, "piggybank-2026-11-23.pbk", "DRIVE", null, null, null, 1, "Unable to resolve host")
+        assertEquals(1_000L, svc.status().lastOkAt)
+        assertEquals(0, svc.status().failingNights)
+        assertEquals("Unable to resolve host", svc.status("DRIVE").lastError)
+        svc.driveAccount = null
+        assertNull(svc.driveAccount)
+    }
 }

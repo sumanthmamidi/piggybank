@@ -36,15 +36,50 @@ object Backups {
             "${folder.label}/$name"
         }.onFailure { e ->
             svc.log(now, name, "LOCAL", null, null, null, schema, e.message ?: e::class.simpleName)
+        }.also { local ->
+            // I4: Drive is tried on its own; a failed upload never affects the local copy.
+            if (svc.driveAccount != null) toDrive(context, db, name, now)
         }
+    }
+
+    private fun toDrive(context: Context, db: PiggyDatabase, name: String, now: Long) {
+        val svc = BackupService(db)
+        runCatching {
+            val token = DriveClient.silentToken(context, svc.driveAccount) ?: error("Open PiggyBank and reconnect Google Drive")
+            val bytes = BackupFile.encode(snapshot(context), schema, BuildConfig.VERSION_NAME, now, svc.counts())
+            val drive = DriveClient(token)
+            val id = drive.upload(name, bytes)
+            val ours = drive.list().mapNotNull { f -> BackupFile.dateOf(f.name)?.let { it to f } }
+            val keep = Retention.keep(ours.map { it.first })
+            ours.filter { it.first !in keep }.forEach { runCatching { drive.delete(it.second.id) } }
+            svc.log(now, name, "DRIVE", id, bytes.size.toLong(), null, schema, null)
+        }.onFailure { e ->
+            svc.log(now, name, "DRIVE", null, null, null, schema, e.message ?: e::class.simpleName)
+        }
+    }
+
+    /** Drive restore (J1): the newest valid backup in the app's hidden Drive folder. */
+    fun newestValidOnDrive(token: String): Result<Found> = runCatching {
+        val drive = DriveClient(token)
+        val files = drive.list().filter { BackupFile.dateOf(it.name) != null }.sortedByDescending { BackupFile.dateOf(it.name) }
+        if (files.isEmpty()) error("No PiggyBank backups in this Google account's Drive")
+        val skipped = mutableListOf<String>()
+        for (f in files) {
+            when (val d = runCatching { BackupFile.decode(drive.download(f.id), schema) }.getOrElse { Decoded.Bad(it.message ?: "Couldn't download it") }) {
+                is Decoded.Ok -> return@runCatching found(d, skipped)
+                is Decoded.Bad -> skipped += "${f.name}: ${d.reason}"
+            }
+        }
+        error("No readable backup on Drive. " + skipped.joinToString("; "))
     }
 
     /** Ran successfully today already (I2: at most once a day). */
     fun doneToday(db: PiggyDatabase): Boolean {
         val zone = TimeZone.currentSystemDefault()
         val today = Clock.System.now().toLocalDateTime(zone).date
-        val last = BackupService(db).status().lastOkAt ?: return false
-        return kotlinx.datetime.Instant.fromEpochMilliseconds(last).toLocalDateTime(zone).date == today
+        val svc = BackupService(db)
+        fun today(at: Long?) = at != null && kotlinx.datetime.Instant.fromEpochMilliseconds(at).toLocalDateTime(zone).date == today
+        return today(svc.status().lastOkAt) && (svc.driveAccount == null || today(svc.status("DRIVE").lastOkAt))
     }
 
     /** A consistent copy of the live database, taken while the app may be writing. */

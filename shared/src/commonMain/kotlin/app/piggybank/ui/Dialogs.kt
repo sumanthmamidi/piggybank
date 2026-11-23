@@ -303,7 +303,7 @@ fun RestoreDialogs(s: UiState, c: AppController) {
     s.restoreMessage?.let { msg ->
         AlertDialog(
             onDismissRequest = c::dismissRestore,
-            title = { Text("Couldn't restore") },
+            title = { Text("Couldn't finish") },
             text = { Text("$msg\n\nNothing on this phone was changed.", color = Piggy.Ink) },
             confirmButton = { TextButton(onClick = c::dismissRestore) { Text("OK", color = Piggy.Ink, fontWeight = FontWeight.Bold) } },
             containerColor = Piggy.Card,

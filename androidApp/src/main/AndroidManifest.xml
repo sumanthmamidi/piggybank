@@ -14,7 +14,9 @@
     <!-- SMS needs a phone, but the app still installs on tablets/Chromebooks for restore and review. -->
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
-    <!-- No INTERNET permission: the app cannot open any network connection. -->
+    <!-- INTERNET is used only by backup/DriveClient.kt (optional Google Drive backup, appDataFolder only).
+         The build fails if any other source file opens a network connection. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- WorkManager (nightly backup) asks for these; backup needs neither network state nor a foreground service. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
@@ -30,6 +32,8 @@
     <application
         android:name=".PiggyApplication"
         android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
