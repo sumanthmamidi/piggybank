@@ -298,4 +298,45 @@ class ReviewTest {
         assertEquals("GUESS", next.tag_source)
         assertNull(next.reviewed_at)
     }
+
+    /** Catch-up filter: everything under an amount becomes one category; no rule, questions left alone. */
+    @Test fun tagSmallPaymentsUnderAnAmount() {
+        receive("Rs.80.00 debited from A/c XX1111 to VPA ravi.kumar@okaxis on 18-11-26." to at(18))
+        receive("Rs.99.00 debited from A/c XX1111 to VPA tea.stall@okaxis on 19-11-26." to at(19))
+        receive("Rs.100.00 debited from A/c XX1111 to VPA chai.point@okaxis on 19-11-26." to at(19, 12)) // not under 100
+        receive("Rs.450.00 debited from A/c XX1111 to VPA anita.rao@okaxis on 20-11-26." to at(20))
+        receive("Transaction Successful! USD1.00 has been debited to your SBI Credit Card XX9999 against recurring e-mandate. Details: Merchant: ACMECLOUD SiHub ID: Y1" to at(17), sender = "VM-SBICRD") // no ₹ amount yet
+        val all = txns().map { it.id }
+        val under = 100_00L
+        assertEquals(2, review.smallPayments(all, under).size)
+
+        assertEquals(2, review.tagSmallPayments(all, under, category("Cafés"), "WANT"))
+        val tagged = txns().filter { it.reviewed_at != null }
+        assertEquals(setOf(80_00L, 99_00L), tagged.map { it.home_amount_minor }.toSet())
+        assertTrue(tagged.all { it.kind == "SPEND" && it.category_id == category("Cafés") && it.need_want == "WANT" && it.rule_id == null })
+        assertTrue(db.ruleQueries.selectAll().executeAsList().isEmpty())
+    }
+
+    /** Shrinking or clearing the catch-up period removes only untagged payments, and their SMS so a re-read brings them back. */
+    @Test fun shorterCatchUpPeriodDropsOnlyUntaggedPayments() {
+        receive("Rs.80.00 debited from A/c XX1111 to VPA ravi.kumar@okaxis on 01-10-26." to at(1, mo = 10))
+        receive("Rs.90.00 debited from A/c XX1111 to VPA anita.rao@okaxis on 02-10-26." to at(2, mo = 10))
+        receive("Rs.70.00 debited from A/c XX1111 to VPA meena.k@okaxis on 20-11-26." to at(20))
+        val tagged = txns().first { it.home_amount_minor == 90_00L }
+        review.tag(listOf(tagged.id), "SPEND", category("Groceries"), "NEED", remember = false)
+
+        val cutoff = at(1, mo = 11)
+        assertEquals(1, review.untaggedArrivedBefore(cutoff))
+        assertEquals(1, review.dropUntaggedArrivedBefore(cutoff))
+        assertEquals(setOf(90_00L, 70_00L), txns().map { it.home_amount_minor }.toSet()) // tagged one stays
+        assertEquals(2L, db.smsQueries.countSms().executeAsOne()) // its SMS row is gone too
+        // Formats whose example SMS was removed still list (this crashed the app once) and point at a remaining SMS or none.
+        val templates = db.smsQueries.selectTemplates().executeAsList()
+        assertTrue(templates.isNotEmpty())
+        assertTrue(templates.all { t -> t.example_sms_id == null || db.smsQueries.selectSmsById(t.example_sms_id!!).executeAsOneOrNull() != null })
+
+        // Reading that period again brings the payment back, untagged.
+        receive("Rs.80.00 debited from A/c XX1111 to VPA ravi.kumar@okaxis on 01-10-26." to at(1, mo = 10))
+        assertEquals(3, txns().size)
+    }
 }

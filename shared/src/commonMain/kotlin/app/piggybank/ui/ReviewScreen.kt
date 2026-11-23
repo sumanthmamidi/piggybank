@@ -50,8 +50,9 @@ fun ReviewScreen(s: UiState, c: AppController, section: Int, onSection: (Int) ->
         when (section) {
             ReviewSection.TODAY -> TodayReview(s, c)
             ReviewSection.CATCH_UP -> {
+                CatchUpFilterButton(s, c)
                 if (s.catchUpCount > 10 && s.catchUpIdentified > 0) TagAllIdentified(s, c)
-                CardStack(s.catchUp, s, c, empty = "Catch-up is done. Every imported payment is tagged.")
+                CardStack(s.catchUp, s, c, empty = if (s.historyMonths == 0) "Catch-up cleared. Use Filter to read past SMS again." else "Catch-up is done. Every imported payment is tagged.")
             }
             else -> Candidates(s, c)
         }

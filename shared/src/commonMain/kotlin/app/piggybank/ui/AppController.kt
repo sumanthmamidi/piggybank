@@ -23,6 +23,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.DateTimePeriod
+import kotlinx.datetime.minus
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -84,6 +86,8 @@ data class ReviewGroup(
     val foreign: ForeignAmount? = null,
 )
 
+data class SmallPayment(val id: Long, val homeMinor: Long)
+
 /** A foreign-currency group: its original total, and whether a ₹ rate is still needed (M2). */
 data class ForeignAmount(
     val currency: String,
@@ -134,6 +138,12 @@ data class UiState(
     val catchUpCount: Int,
     /** Catch-up payments already identified that "Tag all identified" would confirm. */
     val catchUpIdentified: Int,
+    /** Catch-up payments "Tag everything under" may take, with their home amounts (no transfer/duplicate question). */
+    val catchUpSmall: List<SmallPayment>,
+    /** How many months of SMS history catch-up covers; 0 after clearing, null before the first import. */
+    val historyMonths: Int?,
+    /** Untagged payments each shorter period would remove, by months (0 = clear all). */
+    val periodDrops: Map<Int, Int>,
     val autoTaggedToday: List<TxnItem>,
     val candidates: List<SmsRow>,
     val dayClosed: Boolean,
@@ -230,6 +240,34 @@ class AppController(
             onAdded(id)
         }
     }
+
+    /** Tags every catch-up payment under [underMinor] as [categoryId], without saving a rule. */
+    fun tagSmallPayments(underMinor: Long, categoryId: Long, needWant: String?) = act {
+        review.tagSmallPayments(state?.catchUpSmall?.map { it.id } ?: emptyList(), underMinor, categoryId, needWant)
+    }
+
+    /**
+     * Changes how far back catch-up goes. Longer reads older SMS from the inbox; shorter (or 0, clear)
+     * removes untagged payments from before the new start. Tagged payments always stay.
+     */
+    fun setCatchUpPeriod(months: Int) {
+        val current = historyMonths() ?: return
+        if (months > current) return importHistory(months)
+        act {
+            review.dropUntaggedArrivedBefore(periodStart(months, reviewFrom()))
+            db.appQueries.putMeta(HISTORY_MONTHS, months.toString())
+        }
+    }
+
+    private fun historyMonths() = db.appQueries.getMeta(HISTORY_MONTHS).executeAsOneOrNull()?.toIntOrNull()
+
+    private fun reviewFrom(): Long = db.appQueries.getMeta(REVIEW_FROM).executeAsOneOrNull()?.toLongOrNull()
+        ?.let { startOf(Instant.fromEpochMilliseconds(it).toLocalDateTime(tz()).date) } ?: Long.MAX_VALUE
+
+    /** Where a catch-up period of [months] starts; never later than where the daily review starts. */
+    private fun periodStart(months: Int, reviewFrom: Long): Long =
+        if (months == 0) reviewFrom
+        else minOf(reviewFrom, Clock.System.now().minus(DateTimePeriod(months = months), tz()).toEpochMilliseconds())
 
     fun notAPayment(group: ReviewGroup) = act { group.txns.forEach { review.notAPayment(it.id) } }
     fun markDuplicate(hint: DuplicateHint) = act { review.markDuplicate(hint.txnId, hint.otherId) }
@@ -404,6 +442,11 @@ class AppController(
             catchUp = groups(catchUpRows, home, zone, today, withDuplicates = true, showFrom = false, rates = savedRates),
             catchUpCount = catchUpRows.size,
             catchUpIdentified = review.identifiedGuesses(catchUpRows.map { it.id }).size,
+            catchUpSmall = review.smallPayments(catchUpRows.map { it.id }, Long.MAX_VALUE).let { ok ->
+                catchUpRows.filter { it.id in ok }.map { SmallPayment(it.id, it.home_amount_minor!!) }
+            },
+            historyMonths = historyMonths(),
+            periodDrops = (listOf(0) + PERIODS).associateWith { review.untaggedArrivedBefore(periodStart(it, reviewFrom)) },
             autoTaggedToday = auto,
             candidates = db.smsQueries.selectCandidatesBetween(0, Long.MAX_VALUE).executeAsList().map {
                 SmsRow(it.id, whenLabel(it.received_at, zone, today), it.sender, it.body)
@@ -498,6 +541,9 @@ class AppController(
 
     companion object {
         const val REVIEW_FROM = "review_from"
+        /** Written by the platform's history import; the same key. */
+        const val HISTORY_MONTHS = "history_months"
+        val PERIODS = listOf(1, 3, 6, 12)
         val HIDDEN = setOf("SELF_TRANSFER", "CC_BILL", "WALLET_TOPUP")
         val FULL_MONTHS = listOf("January", "February", "March", "April", "May", "June", "July", "August",
             "September", "October", "November", "December")

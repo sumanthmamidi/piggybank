@@ -65,6 +65,49 @@ class ReviewService(
         return picked.size
     }
 
+    /**
+     * Of [ids], the catch-up payments "Tag everything under" may tag: untagged, with a home amount under
+     * [underMinor], and no question pending (possible transfer or duplicate).
+     */
+    fun smallPayments(ids: List<Long>, underMinor: Long): List<Long> = ids.filter { id ->
+        val t = db.txnQueries.selectById(id).executeAsOneOrNull() ?: return@filter false
+        t.reviewed_at == null && t.duplicate_of == null && t.suggested_kind == null &&
+            (t.home_amount_minor ?: return@filter false) < underMinor &&
+            db.txnQueries.selectPossibleDuplicate(id).executeAsOneOrNull() == null
+    }
+
+    /** Tags every small payment from [ids] as one spend category. No rule is saved. Returns how many. */
+    fun tagSmallPayments(ids: List<Long>, underMinor: Long, categoryId: Long, needWant: String?): Int {
+        val picked = smallPayments(ids, underMinor)
+        db.transaction {
+            val at = now()
+            for (id in picked) db.txnQueries.tag("SPEND", categoryId, needWant, "USER", null, at, id)
+        }
+        return picked.size
+    }
+
+    /** How many untagged payments arrived before [until]: what shrinking the catch-up period removes. */
+    fun untaggedArrivedBefore(until: Long): Int = db.txnQueries.selectUntaggedArrivedBefore(until).executeAsList().size
+
+    /**
+     * Shrinks catch-up: removes untagged payments whose SMS arrived before [until], with their SMS rows,
+     * so reading that period again later brings them back from the inbox. Tagged payments always stay.
+     */
+    fun dropUntaggedArrivedBefore(until: Long): Int = db.transactionWithResult {
+        val rows = db.txnQueries.selectUntaggedArrivedBefore(until).executeAsList()
+        for (r in rows) {
+            for (d in db.txnQueries.selectDuplicatesOf(r.id).executeAsList()) {
+                db.txnQueries.deleteDismissedFor(d.id)
+                db.txnQueries.delete(d.id)
+                d.sms_id?.let { db.smsQueries.deleteSms(it) }
+            }
+            db.txnQueries.deleteDismissedFor(r.id)
+            db.txnQueries.delete(r.id)
+            r.sms_id?.let { db.smsQueries.deleteSms(it) }
+        }
+        rows.size
+    }
+
     private fun upsertRule(vpa: String?, counterparty: String?, kind: String, categoryId: Long?, needWant: String?, fromTxn: Long): Long? {
         val (field, pattern) = when {
             vpa != null -> "VPA" to vpa.lowercase()

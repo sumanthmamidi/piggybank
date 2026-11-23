@@ -190,8 +190,10 @@ private fun SmsSetupCard(s: UiState, c: AppController) {
                 Text("Import past SMS", fontWeight = FontWeight.Bold, color = Piggy.Ink)
                 Text("How far back should PiggyBank read? Past days won't need a daily review.", color = Piggy.Muted)
                 if (s.syncing) Text("Reading your inbox…", color = Piggy.Ink)
-                else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(3, 6, 12).forEach { n -> PrimaryButton("$n months", Modifier.weight(1f)) { c.importHistory(n) } }
+                else AppController.PERIODS.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEach { n -> PrimaryButton(periodLabel(n), Modifier.weight(1f)) { c.importHistory(n) } }
+                    }
                 }
             }
             SmsAccess.READY -> Unit

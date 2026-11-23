@@ -92,5 +92,15 @@ countCandidatesBetween:
 SELECT count(*) FROM sms_raw WHERE status = 'CANDIDATE' AND received_at >= ? AND received_at < ?;
 
 selectTemplates:
-SELECT t.*, (SELECT body FROM sms_raw r WHERE r.id = t.example_sms_id) AS example
-FROM sms_template t ORDER BY t.seen_count DESC;
+-- LEFT JOIN: the example SMS may be gone (catch-up period shortened), so example can be NULL.
+SELECT t.*, r.body AS example
+FROM sms_template t LEFT JOIN sms_raw r ON r.id = t.example_sms_id
+ORDER BY t.seen_count DESC;
+
+-- Removing an SMS: formats that used it as their example point to another SMS of theirs, or none.
+deleteSms {
+    UPDATE sms_template
+    SET example_sms_id = (SELECT min(r.id) FROM sms_raw r WHERE r.template_id = sms_template.id AND r.id != :id)
+    WHERE example_sms_id = :id;
+    DELETE FROM sms_raw WHERE id = :id;
+}

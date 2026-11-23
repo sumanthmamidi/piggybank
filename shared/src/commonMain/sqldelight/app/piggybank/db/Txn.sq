@@ -207,3 +207,13 @@ WHERE t.duplicate_of IS NULL AND t.home_amount_minor IS NOT NULL;
 
 selectDismissedPairs:
 SELECT txn_a, txn_b FROM dup_dismissed;
+
+-- Catch-up period: untagged payments whose SMS arrived before a point (they leave the app when the period shrinks).
+selectUntaggedArrivedBefore:
+SELECT t.id, t.sms_id
+FROM txn t
+LEFT JOIN sms_raw r ON r.id = t.sms_id
+WHERE t.reviewed_at IS NULL AND t.duplicate_of IS NULL AND coalesce(r.received_at, t.occurred_at) < :until;
+
+selectDuplicatesOf:
+SELECT id, sms_id FROM txn WHERE duplicate_of = ?;
