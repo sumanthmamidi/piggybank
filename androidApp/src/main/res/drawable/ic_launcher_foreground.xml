@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PiggyBank launcher foreground; same drawing as branding/logo.svg (108dp, safe zone 21–87). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M42.5,31 a7.5,7.5 0 1,0 15.0,0 a7.5,7.5 0 1,0 -15.0,0 Z" android:fillColor="#FFFFAE57" />
+    <path android:pathData="M45.5,31 a4.5,4.5 0 1,0 9.0,0 a4.5,4.5 0 1,0 -9.0,0 Z" android:strokeColor="#FF15171C" android:strokeWidth="1.4" android:strokeLineCap="round" />
+    <path android:pathData="M30,57 c-6,-3 -9,3 -5,6 c3,2 5,-2 2,-3" android:strokeColor="#FFFF6F9C" android:strokeWidth="2.6" android:strokeLineCap="round" />
+    <path android:pathData="M37,70 h7 v10 a2,2 0 0 1 -2,2 h-3 a2,2 0 0 1 -2,-2 Z" android:fillColor="#FFFF6F9C" />
+    <path android:pathData="M59,70 h7 v10 a2,2 0 0 1 -2,2 h-3 a2,2 0 0 1 -2,-2 Z" android:fillColor="#FFFF6F9C" />
+    <path android:pathData="M55,46 Q56,34 63,34 Q68,38 69,48 Z" android:fillColor="#FFFF6F9C" />
+    <path android:pathData="M28,60 a24,18 0 1,0 48,0 a24,18 0 1,0 -48,0 Z" android:fillColor="#FFFF6F9C" />
+    <path android:pathData="M72,53 h6 a4,4 0 0 1 4,4 v6 a4,4 0 0 1 -4,4 h-6 Z" android:fillColor="#FFFF8FB2" />
+    <path android:pathData="M76.2,57.8 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0 Z" android:fillColor="#FF15171C" />
+    <path android:pathData="M76.2,62.2 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0 Z" android:fillColor="#FF15171C" />
+    <path android:pathData="M63.8,54 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0 Z" android:fillColor="#FF15171C" />
+    <path android:pathData="M44,43.2 h12 a1.6,1.6 0 0 1 0,3.2 h-12 a1.6,1.6 0 0 1 0,-3.2 Z" android:fillColor="#FF15171C" />
+</vector>
