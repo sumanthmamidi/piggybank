@@ -137,8 +137,8 @@ private fun CardStack(groups: List<ReviewGroup>, s: UiState, c: AppController, e
     )
 }
 
-private val KINDS = listOf("SPEND", "INVESTMENT", "SELF_TRANSFER", "CC_BILL", "WALLET_TOPUP")
-private val EXCLUDED_CATEGORY = mapOf("SELF_TRANSFER" to "Self-transfer", "CC_BILL" to "Card bill payment", "WALLET_TOPUP" to "Wallet top-up")
+internal val KINDS = listOf("SPEND", "INVESTMENT", "SELF_TRANSFER", "CC_BILL", "WALLET_TOPUP")
+internal val EXCLUDED_CATEGORY = mapOf("SELF_TRANSFER" to "Self-transfer", "CC_BILL" to "Card bill payment", "WALLET_TOPUP" to "Wallet top-up")
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -252,7 +252,7 @@ private fun ReviewCard(
                 Text("Always tag ${g.title} like this", color = Piggy.Ink, fontWeight = FontWeight.Medium)
                 if (g.isPerson) Text("Looks like a person, so it's off by default", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             }
-            Switch(rememberIt, { rememberIt = it }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
+            PiggySwitch(rememberIt, { rememberIt = it })
         }
 
         // M2/M3: a foreign payment without a ₹ amount needs a rate before it can be confirmed.

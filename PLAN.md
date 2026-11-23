@@ -247,10 +247,13 @@ is written to a fixed path the app always uses.
 3. **Monthly review**: salary → needs / wants / invested / still in bank, savings %
    and projection; burn-up vs pace; daily vs allowance; Needs/Wants/Investments bars
    with a pace marker; categories sorted by risk; budget move suggestion; "Not counted" list.
-4. **Rules**: auto-tag rate, filters (Spends / Investments / Salary / Hidden), edit or
-   delete rules, "always ask" list, own accounts. Until a Settings screen exists, Rules also
-   holds **Backup** (nightly switch, Back up now, Restore, Google Drive) and **Save where I paid**.
-5. **Settings**: **Income** (salary and other recurring or one-off incomes, each with an
+4. **Payments** (tab): every tagged payment, Latest or Highest first, filtered by month, type and
+   category; tap one for details, refund, location and Change tag. Monthly's budget rows and its
+   Needs/Wants/Invested lines open it pre-filtered.
+5. **Settings** (gear on every tab): **Rules** (auto-tag rate, rules, "always ask", own accounts,
+   duplicates, SMS formats), **Backup & restore** (nightly switch, Back up now, Restore, Google
+   Drive) and **Save where I paid**.
+6. **Later settings**: **Income** (salary and other recurring or one-off incomes, each with an
    amount, schedule and applicable months), home currency (at first launch) and saved
    exchange rates, budgets per category, Duplicates list, review reminder time, backup
    folder and passphrase, backup history, import past SMS, app lock (biometric).

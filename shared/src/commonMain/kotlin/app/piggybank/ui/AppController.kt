@@ -99,6 +99,9 @@ data class TxnItem(
     val refunded: String? = null,
     /** Where the phone was when the SMS arrived, if saved. */
     val place: app.piggybank.place.Place? = null,
+    val categoryId: Long? = null,
+    /** Payments list: the day heading this row starts, when sorted by time. */
+    val dayHeader: String? = null,
 )
 
 data class ReviewTxn(val id: Long, val amount: String, val whenLabel: String, val fromLabel: String?, val body: String?)
@@ -123,6 +126,16 @@ data class ReviewGroup(
     val foreign: ForeignAmount? = null,
 )
 
+/** The Payments tab: its filter, rows and totals. */
+data class PaymentsUi(
+    val filter: app.piggybank.payments.PaymentsFilter,
+    val rows: List<TxnItem>,
+    val count: Int,
+    val total: String,
+    val monthLabel: String,
+    val categoryName: String?,
+)
+
 data class SmallPayment(val id: Long, val homeMinor: Long)
 
 /** A foreign-currency group: its original total, and whether a ₹ rate is still needed (M2). */
@@ -140,6 +153,7 @@ data class RuleRow(val id: Long, val match: String, val result: String, val hits
 
 /** The Monthly tab for the month being viewed (H9: any month, past ones read-only). */
 data class MonthUi(
+    val month: YearMonth,
     val label: String,
     val shortName: String,
     val isCurrent: Boolean,
@@ -182,6 +196,7 @@ data class UiState(
     /** Untagged payments each shorter period would remove, by months (0 = clear all). */
     val periodDrops: Map<Int, Int>,
     val backup: BackupUi,
+    val payments: PaymentsUi,
     val restoreOffer: RestoreOffer?,
     val restoreMessage: String?,
     val backingUp: Boolean,
@@ -313,6 +328,52 @@ class AppController(
     private fun periodStart(months: Int, reviewFrom: Long): Long =
         if (months == 0) reviewFrom
         else minOf(reviewFrom, Clock.System.now().minus(DateTimePeriod(months = months), tz()).toEpochMilliseconds())
+
+    // ---- Payments list ----
+
+    private var paymentsFilter = app.piggybank.payments.PaymentsFilter()
+
+    fun setPaymentsFilter(f: app.piggybank.payments.PaymentsFilter) { paymentsFilter = f; refresh() }
+
+    /** Change tag from a payment's details: applies to this payment only, no rule (E3). */
+    fun retag(id: Long, kind: String, categoryId: Long?, needWant: String?) = act {
+        review.tag(listOf(id), kind, categoryId, needWant, remember = false)
+    }
+
+    private fun paymentsUi(home: Currency, zone: TimeZone, today: LocalDate): PaymentsUi {
+        val f = paymentsFilter
+        val rows = app.piggybank.payments.PaymentsService(db).list(f, zone)
+        val placeMap = places.placesFor(rows.map { it.id })
+        var lastDay: LocalDate? = null
+        val items = rows.map { r ->
+            val day = Instant.fromEpochMilliseconds(r.occurredAt).toLocalDateTime(zone).date
+            val header = if (f.sort == app.piggybank.payments.PaymentSort.LATEST && day != lastDay) dayLabel(day, today) else null
+            lastDay = day
+            TxnItem(
+                id = r.id, title = r.payee ?: "Unknown payee",
+                subtitle = listOfNotNull(r.institution, r.last4?.let { "••$it" }).joinToString(" "),
+                amount = if (r.origCurrency == home.code) Money(r.netHomeMinor ?: r.origMinor, home).format(compact = true)
+                    else Money(r.origMinor, Currency.of(r.origCurrency)).format(compact = true) +
+                        (r.netHomeMinor?.let { " · " + Money(it, home).format(compact = true) } ?: ""),
+                kind = r.kind, category = r.categoryName, needWant = r.needWant,
+                whenLabel = whenLabel(r.occurredAt, zone, today), auto = r.auto,
+                place = placeMap[r.id], categoryId = r.categoryId, dayHeader = header,
+            )
+        }
+        return PaymentsUi(
+            filter = f, rows = items, count = rows.size,
+            total = Money(rows.sumOf { it.netHomeMinor ?: 0 }, home).format(compact = true),
+            monthLabel = f.month?.let { "${MONTHS[it.month - 1]} ${it.year}" } ?: "All time",
+            categoryName = f.categoryId?.let { id -> db.categoryQueries.selectById(id).executeAsOneOrNull()?.name },
+        )
+    }
+
+    private fun dayLabel(d: LocalDate, today: LocalDate): String = when (d) {
+        today -> "Today"
+        today.minus(DatePeriod(days = 1)) -> "Yesterday"
+        else -> "${d.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }}, ${d.dayOfMonth} ${MONTHS[d.monthNumber - 1]}" +
+            if (d.year != today.year) " ${d.year}" else ""
+    }
 
     // ---- Backup (M4) ----
 
@@ -531,6 +592,7 @@ class AppController(
         return UiState(
             home = home,
             month = MonthUi(
+                month = viewed,
                 label = "${FULL_MONTHS[viewed.month - 1]} ${viewed.year}",
                 shortName = FULL_MONTHS[viewed.month - 1],
                 isCurrent = viewed == current,
@@ -570,6 +632,7 @@ class AppController(
             },
             historyMonths = historyMonths(),
             backup = backupUi(zone, today),
+            payments = paymentsUi(home, zone, today),
             restoreOffer = restoreOffer,
             restoreMessage = restoreMessage,
             backingUp = backingUp,

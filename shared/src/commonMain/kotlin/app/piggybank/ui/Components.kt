@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -23,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,9 +33,35 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun Title(text: String, sub: String? = null) {
-    Column {
-        Text(text, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Piggy.Ink)
-        sub?.let { Text(it, color = Piggy.Muted) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            Text(text, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Piggy.Ink)
+            sub?.let { Text(it, color = Piggy.Muted) }
+        }
+        SettingsButton()
+    }
+}
+
+/** Set by [App]: opens Settings. Every tab's title shows the gear. */
+val LocalOpenSettings = androidx.compose.runtime.staticCompositionLocalOf<(() -> Unit)?> { null }
+
+@Composable
+fun SettingsButton() {
+    val open = LocalOpenSettings.current ?: return
+    Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(onClick = open), contentAlignment = Alignment.Center) {
+        PiggyIcon(PiggyIcons.Settings, Piggy.Ink, 24.dp)
+    }
+}
+
+/** A sub-page header: back arrow and title. */
+@Composable
+fun PageHeader(title: String, onBack: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+            PiggyIcon(PiggyIcons.Back, Piggy.Ink, 24.dp)
+        }
+        Spacer(Modifier.width(4.dp))
+        Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Piggy.Ink)
     }
 }
 
@@ -154,4 +182,16 @@ fun IconTitle(icon: androidx.compose.ui.graphics.vector.ImageVector, text: Strin
         Spacer(Modifier.width(8.dp))
         Text(text, fontWeight = FontWeight.Bold, color = color)
     }
+}
+
+/** The app's switch: dark when on; a grey track, thumb and outline when off, so it reads on white cards. */
+@Composable
+fun PiggySwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+    androidx.compose.material3.Switch(
+        checked, onChange,
+        colors = androidx.compose.material3.SwitchDefaults.colors(
+            checkedTrackColor = Piggy.Ink, checkedThumbColor = Color.White, checkedBorderColor = Piggy.Ink,
+            uncheckedTrackColor = Color(0xFFD5D8DE), uncheckedThumbColor = Color(0xFF7A808C), uncheckedBorderColor = Color(0xFF9AA0AC),
+        ),
+    )
 }

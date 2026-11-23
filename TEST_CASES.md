@@ -5,7 +5,7 @@ Amounts and accounts are examples. "Spends" always means Needs + Wants only.
 
 Mark each case ✅ agree, ✏️ change, or ❌ drop.
 
-Cases added after M3 (E10–E12, R, P, I8–I9, J9–J10, K5–K6) describe what is already built
+Cases added after M3 (E10–E12, R, P, L, S, I8–I9, J9–J10, K5–K6) describe what is already built
 and covered by unit tests; they were written on 23 Nov 2026.
 
 ---
@@ -161,6 +161,25 @@ Setup: SMS history was imported on first run; those payments wait in Catch-up, n
 | P7 | The phone's last location is more than 3 minutes old and no fresh one comes. | No location is saved, rather than a wrong one. |
 | P8 | "Open in Maps". | The point is handed to the phone's maps app; PiggyBank itself makes no network call and shows no place names. |
 | P9 | "Remove" on a location, or the payment itself is deleted ("Not a payment", catch-up removal). | The location is gone too. |
+
+## L. Payments list
+
+| ID | Situation | Expected result |
+|---|---|---|
+| L1 | Open the Payments tab. | Every tagged payment (by the user or a rule), newest first, under day headings ("Today", "Yesterday", "Fri, 21 Nov"). Untagged payments aren't listed; they wait in Review. Duplicates are never listed. |
+| L2 | "Highest". | Biggest first by ₹ amount after refunds; no day headings. Foreign payments still waiting for a rate go last. |
+| L3 | Filters: month (‹ Nov 2026 › or All time), type (All, Spends, Needs, Wants, Investments, Hidden), category. | The list, count and total follow every filter together; a category filter shows with ✕ to clear it. |
+| L4 | Tap a payment → "Change tag". | A form with kind, category and Need/Want edits just this payment; the list and Monthly totals update. No rule is created or changed. |
+| L5 | Monthly → tap a category in Budgets. | Payments opens filtered to that month and category, with the same total as the budget row. Back returns to Monthly. |
+| L6 | Monthly → tap Needs, Wants or Invested in the savings card. | Payments opens with that month and type. |
+
+## S. Settings
+
+| ID | Situation | Expected result |
+|---|---|---|
+| S1 | The gear at the top right of Today, Review, Payments or Monthly. | Settings opens with Rules, Backup & restore and Save where I paid, each with a one-line status. |
+| S2 | Open an entry, then press Back (arrow or system gesture). | Back goes to the Settings list, then out to the tab. Tapping a bottom-bar tab also leaves Settings. |
+| S3 | Any switch that is off (Always tag, Always ask, nightly backup, Save where I paid). | Clearly visible on a white card: grey track, darker grey thumb and outline. On stays dark. |
 
 ## M. Multiple currencies
 

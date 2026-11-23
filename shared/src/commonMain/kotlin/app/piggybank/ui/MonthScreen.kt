@@ -3,6 +3,10 @@ package app.piggybank.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import app.piggybank.payments.PaymentGroup
+import app.piggybank.payments.PaymentsFilter
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +53,7 @@ fun Currency.fmt(minor: Long) = Money(minor, this).format(compact = true)
 private val SubtleOnDark = Color(0xFFB5B9C3)
 
 @Composable
-fun MonthScreen(s: UiState, c: AppController, modifier: Modifier) {
+fun MonthScreen(s: UiState, c: AppController, modifier: Modifier, openPayments: (PaymentsFilter) -> Unit) {
     val m = s.month
     val r = m.report
     val home = s.home
@@ -67,11 +71,12 @@ fun MonthScreen(s: UiState, c: AppController, modifier: Modifier) {
                 Text(if (m.isCurrent) "Day ${r.daysSoFar} of ${r.daysInMonth}" else "Final numbers", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = { c.showMonth(1) }) { Text("›", fontSize = 26.sp, color = Piggy.Ink) }
+            SettingsButton()
         }
 
-        SavingsCard(r, home, m.shortName) { addIncome = true }
+        SavingsCard(r, home, m.shortName, { addIncome = true }) { group -> openPayments(PaymentsFilter(month = m.month, group = group)) }
         BurnUpCard(r, home, m.isCurrent)
-        BudgetsCard(r, home) { editBudgets = true }
+        BudgetsCard(r, home, { editBudgets = true }) { id -> openPayments(PaymentsFilter(month = m.month, categoryId = id, group = PaymentGroup.SPENDS)) }
         r.suggestion?.let { (to, from) ->
             PiggyCard {
                 Text("Budget tip", fontWeight = FontWeight.Bold, color = Piggy.Ink)
@@ -150,7 +155,7 @@ private fun Line(label: String, value: String, color: Color = Piggy.Ink) {
 }
 
 @Composable
-private fun SavingsCard(r: MonthReport, home: Currency, monthName: String, onAddIncome: () -> Unit) {
+private fun SavingsCard(r: MonthReport, home: Currency, monthName: String, onAddIncome: () -> Unit, onGroup: (PaymentGroup) -> Unit) {
     PiggyCard(dark = true) {
         when {
             r.savings == null -> { // H2
@@ -182,11 +187,15 @@ private fun SavingsCard(r: MonthReport, home: Currency, monthName: String, onAdd
                 Box(Modifier.weight(v.toFloat() / total).fillMaxHeight().background(col))
             }
         }
+        // Needs, Wants and Invested open that month's payments of that type.
+        val groups = mapOf("Needs" to PaymentGroup.NEEDS, "Wants" to PaymentGroup.WANTS, "Invested" to PaymentGroup.INVESTMENTS)
         parts.filter { it.second > 0 }.forEach { (label, v, col) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            val g = groups[label]
+            Row(Modifier.let { if (g != null) it.clickable { onGroup(g) } else it }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).background(col, RoundedCornerShape(2.dp)))
                 Text("  $label", color = SubtleOnDark, modifier = Modifier.weight(1f))
                 Text(home.fmt(v), color = Color.White)
+                if (g != null) PiggyIcon(PiggyIcons.ChevronRight, SubtleOnDark, 16.dp) else Spacer(Modifier.width(16.dp))
             }
         }
     }
@@ -243,14 +252,15 @@ private fun BurnUpCard(r: MonthReport, home: Currency, isCurrent: Boolean) {
 
 /** Category bars with the pace marker (H5); riskiest first; fixed costs shown as paid (H6). */
 @Composable
-private fun BudgetsCard(r: MonthReport, home: Currency, onEdit: () -> Unit) {
+private fun BudgetsCard(r: MonthReport, home: Currency, onEdit: () -> Unit, onCategory: (Long) -> Unit) {
     PiggyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Budgets", fontWeight = FontWeight.Bold, color = Piggy.Ink, modifier = Modifier.weight(1f))
             TextButton(onClick = onEdit) { Text(if (r.budgetTotal == 0L) "Set budgets" else "Edit", color = Piggy.Accent) }
         }
         if (r.budgetTotal == 0L) Text("Set a budget per category to see pace, a daily allowance and month-end projections.", color = Piggy.Muted)
-        r.categories.forEach { CategoryBar(it, r.pace, home) }
+        if (r.categories.isNotEmpty()) Text("Tap a category to see its payments.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+        r.categories.forEach { l -> Box(Modifier.clickable { onCategory(l.categoryId) }.padding(vertical = 4.dp)) { CategoryBar(l, r.pace, home) } }
     }
 }
 
@@ -262,9 +272,10 @@ private fun CategoryBar(l: CategoryLine, pace: Double, home: Currency) {
         else -> Piggy.Muted
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(l.name, color = Piggy.Ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             Text("${home.fmt(l.spent)} / ${if (l.budget > 0) home.fmt(l.budget) else "–"}", color = Piggy.Ink)
+            PiggyIcon(PiggyIcons.ChevronRight, Piggy.Muted, 18.dp)
         }
         Box(Modifier.fillMaxWidth().height(10.dp)) {
             Canvas(Modifier.fillMaxSize()) {

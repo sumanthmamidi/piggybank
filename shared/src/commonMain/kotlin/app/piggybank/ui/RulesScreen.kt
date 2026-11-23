@@ -26,9 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
+fun RulesScreen(s: UiState, c: AppController, modifier: Modifier, header: @Composable () -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Title("Rules", "Learned from your reviews. Each one tags a payee automatically.")
+        header()
+        Text("Learned from your reviews. Each one tags a payee automatically.", color = Piggy.Muted)
 
         PiggyCard(dark = true) {
             Text("Auto-tagged", color = Color(0xFFB5B9C3))
@@ -36,9 +37,6 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
             Text("of reviewed payments were tagged without you. This grows as you confirm with \"Always tag\" on.",
                 color = Color(0xFFB5B9C3), style = MaterialTheme.typography.bodySmall)
         }
-
-        BackupCard(s, c)
-        SavePlacesCard(s, c)
 
         Section("Your rules (${s.rules.size})")
         if (s.rules.isEmpty()) Text("No rules yet. Confirm a payment with \"Always tag like this\" on.", color = Piggy.Muted)
@@ -54,7 +52,7 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
                 // E5
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Always ask me", color = Piggy.Ink, modifier = Modifier.weight(1f))
-                    Switch(r.alwaysAsk, { on -> c.setAlwaysAsk(r.id, on) }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
+                    PiggySwitch(r.alwaysAsk, { on -> c.setAlwaysAsk(r.id, on) })
                 }
             }
         }
@@ -82,7 +80,7 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
 
 /** Opt-in: attach the phone's location to payment SMS as they arrive. */
 @Composable
-private fun SavePlacesCard(s: UiState, c: AppController) {
+internal fun SavePlacesCard(s: UiState, c: AppController) {
     PiggyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -91,7 +89,7 @@ private fun SavePlacesCard(s: UiState, c: AppController) {
                     "Stays on this phone; Open in Maps hands the spot to your maps app.",
                     color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             }
-            Switch(s.savePlaces, { c.setSavePlaces(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
+            PiggySwitch(s.savePlaces, { c.setSavePlaces(it) })
         }
         if (s.savePlaces) when (s.placeAccess) {
             PlaceAccess.ALWAYS -> Text("On for new payments, even with the app closed.", color = Piggy.Invest, style = MaterialTheme.typography.bodySmall)
@@ -110,7 +108,7 @@ private fun SavePlacesCard(s: UiState, c: AppController) {
 
 /** M4: local backups to Documents/PiggyBank, nightly and on demand, and restore. */
 @Composable
-private fun BackupCard(s: UiState, c: AppController) {
+internal fun BackupCard(s: UiState, c: AppController) {
     val b = s.backup
     PiggyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -120,7 +118,7 @@ private fun BackupCard(s: UiState, c: AppController) {
                     "Keeps 7 daily, 4 weekly and 3 monthly backups.",
                     color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             }
-            Switch(b.nightly, { c.setNightlyBackup(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
+            PiggySwitch(b.nightly, { c.setNightlyBackup(it) })
         }
         Text(b.last?.let { "Last backup: $it" } ?: "No backup yet.", color = Piggy.Ink, style = MaterialTheme.typography.bodySmall)
         b.lastError?.let { Text("Last try failed: $it", color = Piggy.Accent, style = MaterialTheme.typography.bodySmall) }

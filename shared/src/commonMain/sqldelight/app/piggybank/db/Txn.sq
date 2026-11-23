@@ -217,3 +217,31 @@ WHERE t.reviewed_at IS NULL AND t.duplicate_of IS NULL AND coalesce(r.received_a
 
 selectDuplicatesOf:
 SELECT id, sms_id FROM txn WHERE duplicate_of = ?;
+
+-- Payments list: tagged payments (by the user or a rule), filtered; newest first.
+selectPayments:
+SELECT t.id, t.occurred_at, t.orig_currency, t.orig_amount_minor, t.home_amount_minor, t.refund_minor, t.kind,
+       t.category_id, t.need_want, t.tag_source, t.counterparty_raw, c.name AS category_name, a.institution, a.last4
+FROM txn t
+LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account a ON a.id = t.account_id
+WHERE t.reviewed_at IS NOT NULL AND t.duplicate_of IS NULL
+  AND t.occurred_at >= :from AND t.occurred_at < :until
+  AND (:categoryId IS NULL OR t.category_id = :categoryId)
+  AND (:needWant IS NULL OR t.need_want = :needWant)
+  AND t.kind IN :kinds
+ORDER BY t.occurred_at DESC;
+
+-- The same, biggest first (₹ amount after refunds; foreign payments without a rate last).
+selectPaymentsByAmount:
+SELECT t.id, t.occurred_at, t.orig_currency, t.orig_amount_minor, t.home_amount_minor, t.refund_minor, t.kind,
+       t.category_id, t.need_want, t.tag_source, t.counterparty_raw, c.name AS category_name, a.institution, a.last4
+FROM txn t
+LEFT JOIN category c ON c.id = t.category_id
+LEFT JOIN account a ON a.id = t.account_id
+WHERE t.reviewed_at IS NOT NULL AND t.duplicate_of IS NULL
+  AND t.occurred_at >= :from AND t.occurred_at < :until
+  AND (:categoryId IS NULL OR t.category_id = :categoryId)
+  AND (:needWant IS NULL OR t.need_want = :needWant)
+  AND t.kind IN :kinds
+ORDER BY coalesce(t.home_amount_minor - t.refund_minor, -1) DESC, t.occurred_at DESC;

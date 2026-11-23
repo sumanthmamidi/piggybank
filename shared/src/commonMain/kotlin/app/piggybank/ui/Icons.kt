@@ -153,6 +153,34 @@ object PiggyIcons {
         moveTo(6.5f, 7f); lineTo(7.5f, 19.5f); lineTo(16.5f, 19.5f); lineTo(17.5f, 7f)
     }
 
+    /** Settings: a gear (eight teeth around a ring). */
+    val Settings = line("settings") {
+        circle(12f, 12f, 3f)
+        val teeth = 8
+        for (i in 0 until teeth) {
+            val a = (i * 2 * kotlin.math.PI / teeth).toFloat()
+            val c = kotlin.math.cos(a); val s = kotlin.math.sin(a)
+            moveTo(12f + 6.2f * c, 12f + 6.2f * s); lineTo(12f + 8.6f * c, 12f + 8.6f * s)
+        }
+        circle(12f, 12f, 6.2f)
+    }
+
+    val Back = line("back") { moveTo(19f, 12f); lineTo(5f, 12f); moveTo(11f, 6f); lineTo(5f, 12f); lineTo(11f, 18f) }
+
+    /** Payments: a stack of lines like a statement. */
+    val Payments = line("payments") {
+        roundRect(4f, 3.5f, 20f, 20.5f, 2.5f)
+        moveTo(8f, 8.5f); lineTo(16f, 8.5f)
+        moveTo(8f, 12f); lineTo(16f, 12f)
+        moveTo(8f, 15.5f); lineTo(12.5f, 15.5f)
+    }
+
+    /** Sort: arrows down and up. */
+    val Sort = line("sort") {
+        moveTo(8f, 5f); lineTo(8f, 19f); moveTo(5f, 16f); lineTo(8f, 19f); lineTo(11f, 16f)
+        moveTo(16f, 19f); lineTo(16f, 5f); moveTo(13f, 8f); lineTo(16f, 5f); lineTo(19f, 8f)
+    }
+
     val ChevronRight = line("chevron") { moveTo(9.5f, 6f); lineTo(15.5f, 12f); lineTo(9.5f, 18f) }
 
     /** Restore: a tray with an arrow coming down into it. */

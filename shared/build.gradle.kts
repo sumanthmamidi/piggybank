@@ -26,6 +26,8 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // System back (gesture/button) for Settings and drill-down pages.
+            implementation("org.jetbrains.compose.ui:ui-backhandler:1.8.0")
             implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {

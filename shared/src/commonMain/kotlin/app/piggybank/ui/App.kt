@@ -22,6 +22,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import app.piggybank.payments.PaymentsFilter
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -29,7 +32,7 @@ import androidx.compose.ui.unit.dp
 
 enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     TODAY("Today", PiggyIcons.Today), REVIEW("Review", PiggyIcons.Review),
-    MONTH("Monthly", PiggyIcons.Monthly), RULES("Rules", PiggyIcons.Rules),
+    PAYMENTS("Payments", PiggyIcons.Payments), MONTH("Monthly", PiggyIcons.Monthly),
 }
 
 /** Review tab sections. */
@@ -43,6 +46,12 @@ fun App(controller: AppController) {
         var section by rememberSaveable { mutableIntStateOf(ReviewSection.TODAY) }
         val openReview = { s: Int -> section = s; tab = Tab.REVIEW }
         val openMonth = { tab = Tab.MONTH }
+        var settings by remember { mutableStateOf<SettingsPage?>(null) }
+        // Monthly → a category: Payments opens filtered; back returns to Monthly.
+        var paymentsFromMonth by remember { mutableStateOf(false) }
+        val openPayments = { f: PaymentsFilter, fromMonth: Boolean ->
+            controller.setPaymentsFilter(f); paymentsFromMonth = fromMonth; settings = null; tab = Tab.PAYMENTS
+        }
         Scaffold(
             containerColor = Piggy.Ground,
             bottomBar = {
@@ -51,7 +60,7 @@ fun App(controller: AppController) {
                         val selected = t == tab
                         NavigationBarItem(
                             selected = selected,
-                            onClick = { tab = t },
+                            onClick = { settings = null; if (t == Tab.PAYMENTS && tab != Tab.PAYMENTS) paymentsFromMonth = false; tab = t },
                             icon = {
                                 // A dot on Review while today's payments wait.
                                 val badge = t == Tab.REVIEW && state.queueCount > 0 && !state.dayClosed
@@ -76,11 +85,16 @@ fun App(controller: AppController) {
         ) { inner ->
             // consumeWindowInsets: the keyboard's padding then excludes the bottom bar already padded for.
             val m = Modifier.padding(inner).consumeWindowInsets(inner)
-            when (tab) {
-                Tab.TODAY -> TodayScreen(state, controller, openReview, openMonth, m)
-                Tab.REVIEW -> ReviewScreen(state, controller, section, { section = it }, m)
-                Tab.MONTH -> MonthScreen(state, controller, m)
-                Tab.RULES -> RulesScreen(state, controller, m)
+            CompositionLocalProvider(LocalOpenSettings provides { settings = SettingsPage.HOME }) {
+                val page = settings
+                if (page != null) SettingsScreen(page, state, controller, { settings = it }, m)
+                else when (tab) {
+                    Tab.TODAY -> TodayScreen(state, controller, openReview, openMonth, m)
+                    Tab.REVIEW -> ReviewScreen(state, controller, section, { section = it }, m)
+                    Tab.PAYMENTS -> PaymentsScreen(state, controller, m,
+                        onBack = if (paymentsFromMonth) ({ paymentsFromMonth = false; tab = Tab.MONTH }) else null)
+                    Tab.MONTH -> MonthScreen(state, controller, m) { f -> openPayments(f, true) }
+                }
             }
             RestoreDialogs(state, controller)
         }
