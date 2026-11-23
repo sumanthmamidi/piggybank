@@ -16,7 +16,13 @@ import androidx.lifecycle.lifecycleScope
 import app.piggybank.sms.IngestSummary
 import app.piggybank.ui.App
 import app.piggybank.ui.AppController
+import app.piggybank.backup.BackupFolder
+import app.piggybank.backup.Backups
 import app.piggybank.ui.PlaceAccess
+import app.piggybank.ui.RestoreOffer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import app.piggybank.ui.Platform
 
 class MainActivity : ComponentActivity(), Platform {
@@ -41,6 +47,53 @@ class MainActivity : ComponentActivity(), Platform {
     private fun askPlaceAlways() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) askPlaceBackground.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
     }
+
+    // ---- Restore (J1–J3) ----
+    private var found: Backups.Found? = null
+
+    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree == null) return@registerForActivityResult
+        // Keep the grant: after a reinstall this is how nightly backups keep writing to the same folder.
+        runCatching {
+            contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            BackupFolder.remember(this, tree)
+        }
+        offer { Backups.newestValid(app.piggybank.backup.TreeFolder(this, tree)) }
+    }
+
+    private val pickFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) offer { Backups.fromFile(this, uri) }
+    }
+
+    private fun offer(find: () -> Result<Backups.Found>) {
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) { find() }
+            found = r.getOrNull()
+            controller.restoreFound(
+                r.getOrNull()?.let { f ->
+                    RestoreOffer(f.date, f.counts["txns"] ?: 0, f.counts["sms"] ?: 0, f.counts["rules"] ?: 0, f.skipped)
+                },
+                r.exceptionOrNull()?.message,
+            )
+        }
+    }
+
+    override fun pickRestore(fromFile: Boolean) {
+        if (fromFile) pickFile.launch(arrayOf("*/*")) else pickFolder.launch(BackupFolder.initialUri())
+    }
+
+    override fun confirmRestore() {
+        val f = found ?: return
+        lifecycleScope.launch {
+            val staged = withContext(Dispatchers.IO) { runCatching { Backups.stage(this@MainActivity, f) } }
+            staged.exceptionOrNull()?.let { controller.restoreFound(null, it.message); return@launch }
+            // Restart so the backup is swapped in before the database opens again.
+            startActivity(Intent.makeRestartActivityTask(componentName))
+            Runtime.getRuntime().exit(0)
+        }
+    }
+
+    override fun backUpNow(): String = Backups.backUpNow(this, db).getOrThrow()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

@@ -279,3 +279,34 @@ private fun Double.fmt5(): String {
     val a = kotlin.math.abs(scaled)
     return "$sign${a / 100_000}.${(a % 100_000).toString().padStart(5, '0')}"
 }
+
+/** J1–J4, J8: what restore found, before anything is replaced. */
+@Composable
+fun RestoreDialogs(s: UiState, c: AppController) {
+    s.restoreOffer?.let { o ->
+        AlertDialog(
+            onDismissRequest = c::dismissRestore,
+            title = { Text("Restore backup from ${o.date}?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${o.payments} payments, ${o.sms} SMS and ${o.rules} rules. Everything on this phone is replaced by the backup, " +
+                        "then the app restarts and reads any SMS that arrived after it.", color = Piggy.Ink)
+                    if (o.skipped.isNotEmpty()) Text("Skipped (damaged): " + o.skipped.joinToString("; "),
+                        color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = { TextButton(onClick = c::confirmRestore) { Text("Restore", color = Piggy.Ink, fontWeight = FontWeight.Bold) } },
+            dismissButton = { TextButton(onClick = c::dismissRestore) { Text("Cancel", color = Piggy.Muted) } },
+            containerColor = Piggy.Card,
+        )
+    }
+    s.restoreMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = c::dismissRestore,
+            title = { Text("Couldn't restore") },
+            text = { Text("$msg\n\nNothing on this phone was changed.", color = Piggy.Ink) },
+            confirmButton = { TextButton(onClick = c::dismissRestore) { Text("OK", color = Piggy.Ink, fontWeight = FontWeight.Bold) } },
+            containerColor = Piggy.Card,
+        )
+    }
+}

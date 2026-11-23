@@ -15,6 +15,9 @@
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <!-- No INTERNET permission: the app cannot open any network connection. -->
+    <!-- WorkManager (nightly backup) asks for these; backup needs neither network state nor a foreground service. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
 
     <!-- "Open in Maps" hands a geo: link to whichever maps app is installed. -->
     <queries>

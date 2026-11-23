@@ -36,6 +36,7 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
                 color = Color(0xFFB5B9C3), style = MaterialTheme.typography.bodySmall)
         }
 
+        BackupCard(s, c)
         SavePlacesCard(s, c)
 
         Section("Your rules (${s.rules.size})")
@@ -103,5 +104,29 @@ private fun SavePlacesCard(s: UiState, c: AppController) {
                 TextButton(onClick = c::requestPlaceAccess) { Text("Allow location", color = Piggy.Accent) }
             }
         }
+    }
+}
+
+/** M4: local backups to Documents/PiggyBank, nightly and on demand, and restore. */
+@Composable
+private fun BackupCard(s: UiState, c: AppController) {
+    val b = s.backup
+    PiggyCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Backup", fontWeight = FontWeight.Bold, color = Piggy.Ink)
+                Text("Every night around 2 AM to ${b.folder}. That folder stays when the app is uninstalled. " +
+                    "Keeps 7 daily, 4 weekly and 3 monthly backups.",
+                    color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(b.nightly, { c.setNightlyBackup(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
+        }
+        Text(b.last?.let { "Last backup: $it" } ?: "No backup yet.", color = Piggy.Ink, style = MaterialTheme.typography.bodySmall)
+        b.lastError?.let { Text("Last try failed: $it", color = Piggy.Accent, style = MaterialTheme.typography.bodySmall) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PrimaryButton(if (s.backingUp) "Backing up…" else "Back up now", Modifier.weight(1f), enabled = !s.backingUp) { c.backUpNow() }
+            SecondaryButton("Restore…", Modifier.weight(1f)) { c.restore(fromFile = false) }
+        }
+        TextButton(onClick = { c.restore(fromFile = true) }) { Text("Restore from a file…", color = Piggy.Accent) }
     }
 }

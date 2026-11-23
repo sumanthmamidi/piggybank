@@ -73,6 +73,7 @@ fun App(controller: AppController) {
                 Tab.MONTH -> MonthScreen(state, controller, m)
                 Tab.RULES -> RulesScreen(state, controller, m)
             }
+            RestoreDialogs(state, controller)
         }
     }
 }

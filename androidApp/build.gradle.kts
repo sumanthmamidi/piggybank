@@ -17,7 +17,7 @@ android {
         versionCode = 1
         versionName = "0.1.0-m0"
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -35,6 +35,8 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.datetime)
+    // Nightly backup (I1, I2): runs once a day, waits while the battery is low.
+    implementation(libs.androidx.work.runtime)
 }
 
 /*
@@ -47,6 +49,13 @@ val allowedPermissions = setOf(
     "android.permission.READ_SMS",
     "android.permission.RECEIVE_SMS",
     "android.permission.POST_NOTIFICATIONS",
+    // Opt-in "save where I paid"; read from the OS, stored on the phone only.
+    "android.permission.ACCESS_COARSE_LOCATION",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_BACKGROUND_LOCATION",
+    // WorkManager, for the nightly backup: keep the device awake for the run, and reschedule after a reboot.
+    "android.permission.WAKE_LOCK",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
     // Added by androidx.core on API 33+ for its own broadcasts; it is app-private.
     "app.piggybank.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
 )

@@ -55,3 +55,17 @@ SELECT value FROM meta WHERE key = ?;
 
 selectLatestClosed:
 SELECT * FROM day_review ORDER BY date DESC LIMIT 1;
+
+-- What a backup holds, for its manifest and the restore prompt.
+countRows:
+SELECT
+  (SELECT count(*) FROM txn) AS txns,
+  (SELECT count(*) FROM sms_raw) AS sms,
+  (SELECT count(*) FROM sms_template) AS templates,
+  (SELECT count(*) FROM rule) AS rules,
+  (SELECT count(*) FROM category) AS categories,
+  (SELECT count(*) FROM budget) AS budgets,
+  (SELECT count(*) FROM income) AS incomes;
+
+selectRecentBackups:
+SELECT * FROM backup_log ORDER BY created_at DESC LIMIT ?;

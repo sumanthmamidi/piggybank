@@ -49,7 +49,25 @@ interface Platform {
     fun requestPlaceAccess()
     /** Hands a point to the phone's maps app; this app never goes online. */
     fun openMap(lat: Double, lon: Double, label: String)
+    /** Blocking: writes today's backup; returns where it went, or throws. */
+    fun backUpNow(): String
+    /** Opens the folder picker at Documents/PiggyBank, or a file picker; answers through [AppController.restoreFound]. */
+    fun pickRestore(fromFile: Boolean)
+    /** Replaces this phone's data with the backup found and restarts the app. */
+    fun confirmRestore()
 }
+
+/** A valid backup the user can restore (J1–J3). */
+data class RestoreOffer(val date: String, val payments: Long, val sms: Long, val rules: Long, val skipped: List<String>)
+
+data class BackupUi(
+    val nightly: Boolean,
+    val folder: String,
+    val last: String?,
+    /** Shown on Today after two failed runs in a row (I5). */
+    val failing: Boolean,
+    val lastError: String?,
+)
 
 enum class PlaceAccess { NONE, WHILE_OPEN, ALWAYS }
 
@@ -154,6 +172,10 @@ data class UiState(
     val historyMonths: Int?,
     /** Untagged payments each shorter period would remove, by months (0 = clear all). */
     val periodDrops: Map<Int, Int>,
+    val backup: BackupUi,
+    val restoreOffer: RestoreOffer?,
+    val restoreMessage: String?,
+    val backingUp: Boolean,
     /** "Save where I paid" is on. */
     val savePlaces: Boolean,
     val placeAccess: PlaceAccess,
@@ -282,6 +304,58 @@ class AppController(
     private fun periodStart(months: Int, reviewFrom: Long): Long =
         if (months == 0) reviewFrom
         else minOf(reviewFrom, Clock.System.now().minus(DateTimePeriod(months = months), tz()).toEpochMilliseconds())
+
+    // ---- Backup (M4) ----
+
+    private val backups = app.piggybank.backup.BackupService(db)
+    private var restoreOffer: RestoreOffer? = null
+    private var restoreMessage: String? = null
+    private var backingUp = false
+
+    fun backUpNow() {
+        if (backingUp) return
+        backingUp = true
+        state = state?.copy(backingUp = true)
+        act {
+            runCatching { platform.backUpNow() } // the outcome is in the backup log either way
+            backingUp = false
+        }
+    }
+
+    fun setNightlyBackup(on: Boolean) = act { backups.nightly = on }
+
+    fun restore(fromFile: Boolean) {
+        restoreMessage = null
+        platform.pickRestore(fromFile)
+    }
+
+    /** Called by the platform once a picked folder or file was checked. */
+    fun restoreFound(offer: RestoreOffer?, error: String?) {
+        restoreOffer = offer
+        restoreMessage = error
+        refresh()
+    }
+
+    fun confirmRestore() = platform.confirmRestore()
+    fun dismissRestore() { restoreOffer = null; restoreMessage = null; refresh() }
+
+    private fun backupUi(zone: TimeZone, today: LocalDate): BackupUi {
+        val st = backups.status()
+        return BackupUi(
+            nightly = backups.nightly,
+            folder = "Documents/PiggyBank",
+            last = st.lastOkAt?.let { at ->
+                whenLabel(at, zone, today) + (st.lastOkSize?.let { " · ${sizeLabel(it)}" } ?: "")
+            },
+            failing = st.failingNights >= 2,
+            lastError = st.lastError,
+        )
+    }
+
+    private fun sizeLabel(bytes: Long) = when {
+        bytes >= 1_000_000 -> "${bytes / 100_000 / 10.0} MB"
+        else -> "${(bytes + 999) / 1000} KB"
+    }
 
     // ---- Places (opt-in) ----
 
@@ -472,6 +546,10 @@ class AppController(
                 catchUpRows.filter { it.id in ok }.map { SmallPayment(it.id, it.home_amount_minor!!) }
             },
             historyMonths = historyMonths(),
+            backup = backupUi(zone, today),
+            restoreOffer = restoreOffer,
+            restoreMessage = restoreMessage,
+            backingUp = backingUp,
             savePlaces = places.enabled,
             placeAccess = platform.placeAccess,
             periodDrops = (listOf(0) + PERIODS).associateWith { review.untaggedArrivedBefore(periodStart(it, reviewFrom)) },

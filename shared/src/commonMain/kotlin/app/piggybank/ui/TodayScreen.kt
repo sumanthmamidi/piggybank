@@ -40,6 +40,12 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
             Title("Today", s.todayLabel)
         }
         if (s.access != SmsAccess.READY) SmsSetupCard(s, c)
+        // I5: two failed backups in a row.
+        if (s.backup.failing) PiggyCard {
+            Text("Backups are failing", fontWeight = FontWeight.Bold, color = Piggy.Accent)
+            Text(s.backup.lastError ?: "The last two backups didn't finish.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = c::backUpNow) { Text("Try again now", color = Piggy.Accent) }
+        }
 
         // G1: spends today, split by Need/Want; investments shown apart, never inside "spent".
         PiggyCard(dark = true) {
@@ -187,6 +193,8 @@ private fun SmsSetupCard(s: UiState, c: AppController) {
                     PrimaryButton("Allow SMS access") { c.requestSmsAccess() }
                     if (s.access == SmsAccess.DENIED) SecondaryButton("Open settings") { c.openAppSettings() }
                 }
+                // J1/J2: on a new install, bring the old history back first.
+                TextButton(onClick = { c.restore(fromFile = false) }) { Text("Restore a backup instead", color = Piggy.Accent) }
             }
             SmsAccess.GRANTED_NO_IMPORT -> {
                 Text("Import past SMS", fontWeight = FontWeight.Bold, color = Piggy.Ink)
