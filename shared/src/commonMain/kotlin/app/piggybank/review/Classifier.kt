@@ -192,6 +192,8 @@ class Classifier(
             if (name == null) return false
             if (BUSINESS.containsMatchIn(name) || GUESSES.any { it.pattern.containsMatchIn(name) }) return false
             val words = name.split(' ')
+            // One long run-together word ("ANTHROPICCLAUDESUB", "RAZZOMATOONLINEORDER") is a merchant code, not a name.
+            if (words.size == 1 && words[0].length >= 12) return false
             return words.size in 1..4 && words.all { w -> w.all { it.isLetter() } }
         }
 

@@ -200,6 +200,11 @@ class SmsParserTest {
         assertNull(p.homeAmount)
     }
 
+    @Test fun blankAmountIsNotZero() {
+        // SBI card: "Trxn. of USD.00 done on your credit card …" has no real amount.
+        assertNull(parse("Trxn. of USD.00 done on your credit card ending 9999 at ACME CLOUD on 4 Nov 26."))
+    }
+
     @Test fun m4Decimals() {
         assertEquals(1_200, parse("JPY 1,200 spent on card x4421 at LAWSON")!!.amount!!.minor)
         assertEquals(3_500, parse("KWD 3.500 spent on card x4421 at TALABAT")!!.amount!!.minor)

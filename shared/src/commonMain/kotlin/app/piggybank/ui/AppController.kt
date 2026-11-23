@@ -80,6 +80,17 @@ data class ReviewGroup(
     val duplicate: DuplicateHint?,
     /** e.g. "Money arrived in your account ••2222": why [kind] is pre-selected. */
     val suggestion: String? = null,
+    /** Set when the payments are in a foreign currency (a group never mixes currencies). */
+    val foreign: ForeignAmount? = null,
+)
+
+/** A foreign-currency group: its original total, and whether a ₹ rate is still needed (M2). */
+data class ForeignAmount(
+    val currency: String,
+    val originalMinor: Long,
+    val needsRate: Boolean,
+    /** The user's last rate for this currency, to pre-fill. */
+    val savedRate: String?,
 )
 
 data class SmsRow(val id: Long, val whenLabel: String, val sender: String, val body: String)
@@ -196,8 +207,11 @@ class AppController(
 
     // ---- Review ----
 
-    fun confirm(group: ReviewGroup, kind: String, categoryId: Long?, needWant: String?, remember: Boolean) =
-        act { review.tag(group.txns.map { it.id }, kind, categoryId, needWant, remember) }
+    /** [rate] is "1 <foreign> = rate <home>" typed on the card; it's saved and fills every waiting payment in that currency. */
+    fun confirm(group: ReviewGroup, kind: String, categoryId: Long?, needWant: String?, remember: Boolean, rate: String? = null) = act {
+        if (rate != null && group.foreign != null) months.setRate(group.foreign.currency, rate)
+        review.tag(group.txns.map { it.id }, kind, categoryId, needWant, remember)
+    }
 
     fun notAPayment(group: ReviewGroup) = act { group.txns.forEach { review.notAPayment(it.id) } }
     fun markDuplicate(hint: DuplicateHint) = act { review.markDuplicate(hint.txnId, hint.otherId) }
@@ -306,6 +320,7 @@ class AppController(
                 it.home_amount_minor, it.kind, it.category_name, it.need_want, it.occurred_at, it.tag_source, it.refund_minor)
         }
 
+        val savedRates = months.rates()
         val queueRows = db.txnQueries.selectReviewQueue(reviewFrom, Long.MAX_VALUE).executeAsList()
         val catchUpRows = db.txnQueries.selectReviewQueue(0, reviewFrom).executeAsList()
 
@@ -366,9 +381,9 @@ class AppController(
             invested = money(sum(dayRows.filter { it.kind == "INVESTMENT" })),
             notCounted = todayItems.filter { it.kind in HIDDEN },
             todayItems = todayItems.filter { it.kind !in HIDDEN },
-            queue = groups(queueRows, home, zone, today, withDuplicates = true),
+            queue = groups(queueRows, home, zone, today, withDuplicates = true, rates = savedRates),
             queueCount = queueRows.size,
-            catchUp = groups(catchUpRows, home, zone, today, withDuplicates = true, showFrom = false),
+            catchUp = groups(catchUpRows, home, zone, today, withDuplicates = true, showFrom = false, rates = savedRates),
             catchUpCount = catchUpRows.size,
             autoTaggedToday = auto,
             candidates = db.smsQueries.selectCandidatesBetween(0, Long.MAX_VALUE).executeAsList().map {
@@ -398,7 +413,7 @@ class AppController(
      */
     private val selfTransferCategory by lazy { db.categoryQueries.selectByName("Self-transfer").executeAsOneOrNull()?.id }
 
-    private fun groups(rows: List<SelectReviewQueue>, home: Currency, zone: TimeZone, today: LocalDate, withDuplicates: Boolean, showFrom: Boolean = true): List<ReviewGroup> {
+    private fun groups(rows: List<SelectReviewQueue>, home: Currency, zone: TimeZone, today: LocalDate, withDuplicates: Boolean, showFrom: Boolean = true, rates: Map<String, String> = emptyMap()): List<ReviewGroup> {
         val dupHints = if (withDuplicates) rows.mapNotNull { r ->
             db.txnQueries.selectPossibleDuplicate(r.id).executeAsOneOrNull()?.let { o ->
                 r.id to DuplicateHint(r.id, o.id, "Same as ${o.counterparty_raw ?: "a payment"} ${o.home_amount_minor?.let { Money(it, home).format(compact = true) } ?: ""} at ${clock(o.occurred_at, zone)}?")
@@ -406,7 +421,8 @@ class AppController(
         }.toMap() else emptyMap()
 
         return rows.groupBy { r ->
-            when {
+            // Foreign payments get their own card per currency, so one rate covers the whole card.
+            (if (r.orig_currency != home.code) "${r.orig_currency}:" else "") + when {
                 r.id in dupHints -> "dup:${r.id}"
                 r.suggested_kind != null -> "suggest:${r.id}"
                 r.vpa != null -> "vpa:${r.vpa.lowercase()}"
@@ -416,6 +432,10 @@ class AppController(
             val first = list.first()
             val name = Classifier.nameKey(first.counterparty_raw, first.vpa)
             val total = list.sumOf { it.home_amount_minor ?: 0 }
+            val foreignCur = first.orig_currency.takeIf { it != home.code }
+            val foreign = foreignCur?.let { cur ->
+                ForeignAmount(cur, list.sumOf { it.orig_amount_minor }, list.any { it.home_amount_minor == null }, rates[cur])
+            }
             val days = list.map { Instant.fromEpochMilliseconds(it.occurred_at).toLocalDateTime(zone).date }
             ReviewGroup(
                 key = key,
@@ -424,8 +444,10 @@ class AppController(
                     listOfNotNull(first.institution, first.last4?.let { "••$it" }).joinToString(" ").ifEmpty { null },
                     if (list.size == 1) whenLabel(first.occurred_at, zone, today) else "${list.size} payments · ${dayRange(days.min(), days.max())}",
                 ).joinToString(" · "),
-                total = if (list.size == 1 && first.orig_currency != home.code)
-                    "${Money(first.orig_amount_minor, Currency.of(first.orig_currency)).format(compact = true)} · ${first.home_amount_minor?.let { Money(it, home).format(compact = true) } ?: "₹ needed"}"
+                // Never "₹0" for a foreign payment without a rate: show what was actually paid.
+                total = if (foreign != null)
+                    Money(foreign.originalMinor, Currency.of(foreign.currency)).format(compact = true) +
+                        if (foreign.needsRate) "" else " · ${Money(total, home).format(compact = true)}"
                 else Money(total, home).format(compact = true),
                 isPerson = Classifier.looksLikePerson(name, first.vpa),
                 txns = list.map {
@@ -445,10 +467,13 @@ class AppController(
                 guessed = first.tag_source == "GUESS",
                 duplicate = dupHints[first.id],
                 suggestion = first.suggest_reason,
+                foreign = foreign,
             )
         }.sortedWith(
-            // Quick yes/no questions first (possible transfer, possible duplicate), then the biggest payee groups.
-            compareByDescending<ReviewGroup> { it.suggestion != null || it.duplicate != null }.thenByDescending { it.txns.size },
+            // Quick questions first (possible transfer, possible duplicate, a missing ₹ rate that keeps money
+            // out of the totals), then the biggest payee groups.
+            compareByDescending<ReviewGroup> { it.suggestion != null || it.duplicate != null || it.foreign?.needsRate == true }
+                .thenByDescending { it.txns.size },
         )
     }
 

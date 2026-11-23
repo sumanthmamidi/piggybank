@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,10 +34,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.piggybank.core.Currency
+import app.piggybank.core.Money
+import app.piggybank.sms.SmsIngestor
 
 @Composable
 fun ReviewScreen(s: UiState, c: AppController, section: Int, onSection: (Int) -> Unit, modifier: Modifier) {
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Title("Close your day", if (s.streak > 0) "${s.streak}-day streak" else "One card per payee. Tag once, and it's remembered.")
         Segments(
             listOf("Today ${s.queueCount}", "Catch-up ${s.catchUpCount}", "SMS ${s.candidates.size}"),
@@ -90,7 +94,8 @@ private fun CardStack(groups: List<ReviewGroup>, s: UiState, c: AppController, e
     ReviewCard(
         g = current,
         categories = s.categories,
-        onConfirm = { kind, cat, nw, remember -> c.confirm(current, kind, cat, nw, remember) },
+        home = s.home,
+        onConfirm = { kind, cat, nw, remember, rate -> c.confirm(current, kind, cat, nw, remember, rate) },
         onNotPayment = { c.notAPayment(current) },
         onSkip = { skipped.remove(current.key); skipped.add(current.key) },
         onDuplicate = { c.markDuplicate(it) },
@@ -106,7 +111,8 @@ private val EXCLUDED_CATEGORY = mapOf("SELF_TRANSFER" to "Self-transfer", "CC_BI
 private fun ReviewCard(
     g: ReviewGroup,
     categories: List<CategoryOption>,
-    onConfirm: (kind: String, categoryId: Long?, needWant: String?, remember: Boolean) -> Unit,
+    home: Currency,
+    onConfirm: (kind: String, categoryId: Long?, needWant: String?, remember: Boolean, rate: String?) -> Unit,
     onNotPayment: () -> Unit,
     onSkip: () -> Unit,
     onDuplicate: (DuplicateHint) -> Unit,
@@ -196,9 +202,31 @@ private fun ReviewCard(
             Switch(rememberIt, { rememberIt = it }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
         }
 
-        val ready = when (kind) { "SPEND" -> categoryId != null && needWant != null; "INVESTMENT" -> categoryId != null; else -> true }
+        // M2/M3: a foreign payment without a ₹ amount needs a rate before it can be confirmed.
+        val foreign = g.foreign
+        var rate by remember(g.key) { mutableStateOf(foreign?.savedRate ?: "") }
+        val converted = foreign?.let { f -> SmsIngestor.convert(Money(f.originalMinor, Currency.of(f.currency)), rate, home)?.takeIf { rate.isNotBlank() && it.minor > 0 } }
+        if (foreign != null && foreign.needsRate) {
+            Column(Modifier.fillMaxWidth().background(Piggy.Ground, RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Paid in ${foreign.currency}. Add the rate to count it in ${home.code}.", color = Piggy.Ink, fontWeight = FontWeight.Medium)
+                // Shown above the field so it stays visible while the keyboard is open.
+                Text(
+                    converted?.let { "${Money(foreign.originalMinor, Currency.of(foreign.currency)).format(compact = true)} = ${it.format(compact = true)} · saved for future ${foreign.currency} payments" }
+                        ?: "Use the rate on your card statement. It's never fetched online.",
+                    color = if (converted != null) Piggy.Invest else Piggy.Muted,
+                    fontWeight = if (converted != null) FontWeight.Bold else FontWeight.Normal,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("1 ${foreign.currency} = ${home.symbol}", color = Piggy.Ink)
+                    AmountField("Rate", rate, { rate = it }, Modifier.weight(1f).padding(start = 8.dp))
+                }
+            }
+        }
+        val rateOk = foreign == null || !foreign.needsRate || converted != null
+        val ready = rateOk && when (kind) { "SPEND" -> categoryId != null && needWant != null; "INVESTMENT" -> categoryId != null; else -> true }
         PrimaryButton(if (g.txns.size > 1) "Confirm all ${g.txns.size}" else "Confirm", Modifier.fillMaxWidth(), enabled = ready) {
-            onConfirm(kind, categoryId, needWant, rememberIt)
+            onConfirm(kind, categoryId, needWant, rememberIt, rate.takeIf { foreign?.needsRate == true })
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onSkip) { Text("Skip for now", color = Piggy.Muted) }

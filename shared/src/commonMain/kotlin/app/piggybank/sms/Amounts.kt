@@ -33,6 +33,8 @@ object Amounts {
     fun find(body: String): List<AmountMention> = pattern.findAll(body).mapNotNull { m ->
         val (currency, ambiguous) = currencyOf(m.groupValues[1])
         val money = Money.parse(m.groupValues[3].trimEnd(','), currency) ?: return@mapNotNull null
+        // "Trxn. of USD.00": a blank amount, not a payment of zero.
+        if (money.minor == 0L) return@mapNotNull null
         val before = body.substring(maxOf(0, m.range.first - 30), m.range.first)
         val filler = m.groupValues[2].lowercase()
         AmountMention(

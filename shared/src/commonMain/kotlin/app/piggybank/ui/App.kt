@@ -3,6 +3,7 @@ package app.piggybank.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -64,7 +65,8 @@ fun App(controller: AppController) {
                 }
             },
         ) { inner ->
-            val m = Modifier.padding(inner)
+            // consumeWindowInsets: the keyboard's padding then excludes the bottom bar already padded for.
+            val m = Modifier.padding(inner).consumeWindowInsets(inner)
             when (tab) {
                 Tab.TODAY -> TodayScreen(state, controller, openReview, openMonth, m)
                 Tab.REVIEW -> ReviewScreen(state, controller, section, { section = it }, m)

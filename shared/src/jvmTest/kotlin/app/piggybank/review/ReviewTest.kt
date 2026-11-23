@@ -132,6 +132,7 @@ class ReviewTest {
         assertTrue(Classifier.looksLikePerson("RAMESH MUKHIYA", null))
         assertTrue(Classifier.looksLikePerson(null, "9876543210@ybl"))
         assertFalse(Classifier.looksLikePerson("KABAB STORIES", null))
+        assertFalse(Classifier.looksLikePerson("ACMECLOUDSUBSCRIPTION", null))
         receive("Sent Rs.306.00 From HDFC Bank A/C *1111 To RAMESH MUKHIYA On 21/11/26 Ref 6236" to at(21))
         assertNull(only().category_id)
     }
@@ -244,6 +245,18 @@ class ReviewTest {
         val (a, b) = txns().map { it.id }.sorted()
         review.markDuplicate(b, a)
         assertEquals(1, txns().count { it.duplicate_of == null })
+    }
+
+    @Test fun foreignPaymentConfirmedWithARateOnTheCard() {
+        receive(
+            "Transaction Successful! USD23.60 has been debited to your SBI Credit Card XX9999 against recurring e-mandate. Details: Merchant: ACMECLOUD SiHub ID: Y1" to at(4, 6),
+            "Transaction Successful! USD23.60 has been debited to your SBI Credit Card XX9999 against recurring e-mandate. Details: Merchant: ACMECLOUD SiHub ID: Y2" to at(4, 6, mo = 10),
+        )
+        assertTrue(txns().all { it.home_amount_minor == null }) // left out of totals until a rate is given
+        // What the card's Confirm does: save the rate (filling every waiting USD payment), then tag.
+        app.piggybank.month.MonthService(db) { 0 }.setRate("USD", "88.50")
+        review.tag(txns().map { it.id }, "SPEND", category("Entertainment"), "WANT", remember = false)
+        assertTrue(txns().all { it.home_amount_minor == 2_088_60L && it.reviewed_at != null })
     }
 
     @Test fun f2f4Streak() {

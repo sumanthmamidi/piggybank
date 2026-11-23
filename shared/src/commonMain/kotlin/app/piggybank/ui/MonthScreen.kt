@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -57,7 +58,7 @@ fun MonthScreen(s: UiState, c: AppController, modifier: Modifier) {
     var editBudgets by remember { mutableStateOf(false) }
     var rateFor by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // H9: browse months.
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { c.showMonth(-1) }) { Text("‹", fontSize = 26.sp, color = Piggy.Ink) }

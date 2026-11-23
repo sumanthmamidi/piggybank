@@ -44,7 +44,7 @@ private fun thisMonth(): YearMonth =
     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.let { YearMonth(it.year, it.monthNumber) }
 
 @Composable
-private fun AmountField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
+internal fun AmountField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier.fillMaxWidth()) {
     OutlinedTextField(
         value = value,
         onValueChange = { v -> onChange(v.filter { it.isDigit() || it == '.' || it == ',' }) },
