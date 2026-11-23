@@ -8,3 +8,8 @@ local.properties
 captures/
 # Real SMS samples for parser tests stay on this machine only
 testdata/private/
+# Release signing key and its passwords never go in git
+keystore.properties
+*.jks
+*.keystore
+dist/

@@ -1,10 +1,34 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
 }
+
+/*
+ * Release signing. CI passes PIGGY_KEYSTORE / PIGGY_KEYSTORE_PASSWORD / PIGGY_KEY_ALIAS / PIGGY_KEY_PASSWORD;
+ * on this Mac they come from the git-ignored keystore.properties. Every shared APK must use the same key,
+ * or it can't install over an earlier copy.
+ */
+val signing: Map<String, String>? = run {
+    System.getenv("PIGGY_KEYSTORE")?.let { file ->
+        return@run mapOf(
+            "storeFile" to file,
+            "storePassword" to System.getenv("PIGGY_KEYSTORE_PASSWORD"),
+            "keyAlias" to System.getenv("PIGGY_KEY_ALIAS"),
+            "keyPassword" to System.getenv("PIGGY_KEY_PASSWORD"),
+        )
+    }
+    val f = rootProject.file("keystore.properties").takeIf { it.exists() } ?: return@run null
+    Properties().apply { f.inputStream().use { load(it) } }.let { p -> p.stringPropertyNames().associateWith { p.getProperty(it) } }
+}
+
+/** One more per commit, so each build installs over the one before it. */
+val commitCount: Int = runCatching {
+    providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(1)
 
 android {
     namespace = "app.piggybank"
@@ -14,8 +38,16 @@ android {
         applicationId = "app.piggybank"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0-m0"
+        versionCode = commitCount
+        versionName = "0.4.$commitCount"
+    }
+    signingConfigs {
+        if (signing != null) create("release") {
+            storeFile = file(signing.getValue("storeFile"))
+            storePassword = signing["storePassword"]
+            keyAlias = signing["keyAlias"]
+            keyPassword = signing["keyPassword"]
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -23,7 +55,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 }
 
