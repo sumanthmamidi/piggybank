@@ -43,7 +43,15 @@ interface Platform {
     fun importHistory(months: Int): IngestSummary
     /** Blocking; null when SMS reading isn't set up. */
     fun catchUp(): IngestSummary?
+    /** Location permission for "save where I paid". */
+    val placeAccess: PlaceAccess
+    /** Asks for location while open first, then (once that's granted) all the time. */
+    fun requestPlaceAccess()
+    /** Hands a point to the phone's maps app; this app never goes online. */
+    fun openMap(lat: Double, lon: Double, label: String)
 }
+
+enum class PlaceAccess { NONE, WHILE_OPEN, ALWAYS }
 
 enum class SmsAccess { NOT_ASKED, DENIED, GRANTED_NO_IMPORT, READY }
 
@@ -62,6 +70,8 @@ data class TxnItem(
     val whenLabel: String,
     val auto: Boolean,
     val refunded: String? = null,
+    /** Where the phone was when the SMS arrived, if saved. */
+    val place: app.piggybank.place.Place? = null,
 )
 
 data class ReviewTxn(val id: Long, val amount: String, val whenLabel: String, val fromLabel: String?, val body: String?)
@@ -144,6 +154,9 @@ data class UiState(
     val historyMonths: Int?,
     /** Untagged payments each shorter period would remove, by months (0 = clear all). */
     val periodDrops: Map<Int, Int>,
+    /** "Save where I paid" is on. */
+    val savePlaces: Boolean,
+    val placeAccess: PlaceAccess,
     val autoTaggedToday: List<TxnItem>,
     val candidates: List<SmsRow>,
     val dayClosed: Boolean,
@@ -176,6 +189,7 @@ class AppController(
 
     private val review get() = ReviewService(db, tz())
     private val months = MonthService(db)
+    private val places = app.piggybank.place.PlaceService(db)
     private var viewedMonth: YearMonth? = null
 
     fun refresh() = act { }
@@ -268,6 +282,17 @@ class AppController(
     private fun periodStart(months: Int, reviewFrom: Long): Long =
         if (months == 0) reviewFrom
         else minOf(reviewFrom, Clock.System.now().minus(DateTimePeriod(months = months), tz()).toEpochMilliseconds())
+
+    // ---- Places (opt-in) ----
+
+    fun setSavePlaces(on: Boolean) {
+        act { places.enabled = on }
+        if (on && platform.placeAccess != PlaceAccess.ALWAYS) platform.requestPlaceAccess()
+    }
+
+    fun requestPlaceAccess() = platform.requestPlaceAccess()
+    fun openMap(t: TxnItem) { t.place?.let { platform.openMap(it.lat, it.lon, t.title) } }
+    fun removePlace(id: Long) = act { places.remove(id) }
 
     fun notAPayment(group: ReviewGroup) = act { group.txns.forEach { review.notAPayment(it.id) } }
     fun markDuplicate(hint: DuplicateHint) = act { review.markDuplicate(hint.txnId, hint.otherId) }
@@ -367,6 +392,7 @@ class AppController(
             whenLabel = whenLabel(at, zone, today),
             auto = source == "RULE",
             refunded = refund.takeIf { it > 0 }?.let { money(it) },
+            place = places.placeOf(id),
         )
 
         val counted = dayRows.filter { it.kind == "SPEND" && it.home_amount_minor != null }
@@ -446,6 +472,8 @@ class AppController(
                 catchUpRows.filter { it.id in ok }.map { SmallPayment(it.id, it.home_amount_minor!!) }
             },
             historyMonths = historyMonths(),
+            savePlaces = places.enabled,
+            placeAccess = platform.placeAccess,
             periodDrops = (listOf(0) + PERIODS).associateWith { review.untaggedArrivedBefore(periodStart(it, reviewFrom)) },
             autoTaggedToday = auto,
             candidates = db.smsQueries.selectCandidatesBetween(0, Long.MAX_VALUE).executeAsList().map {

@@ -1,0 +1,28 @@
+-- Where the phone was when a payment SMS arrived (opt-in, new payments only). Never leaves the phone.
+CREATE TABLE IF NOT EXISTS txn_place (
+    txn_id     INTEGER PRIMARY KEY REFERENCES txn(id) ON DELETE CASCADE,
+    lat        REAL    NOT NULL,
+    lon        REAL    NOT NULL,
+    accuracy_m REAL,
+    fixed_at   INTEGER NOT NULL  -- epoch millis of the location fix
+);
+
+-- Payments whose SMS arrived at or after :since and have no place yet.
+selectRecentWithoutPlace:
+SELECT t.id, t.kind, t.orig_currency, t.duplicate_of, r.body, r.received_at
+FROM txn t
+JOIN sms_raw r ON r.id = t.sms_id
+LEFT JOIN txn_place p ON p.txn_id = t.id
+WHERE p.txn_id IS NULL AND r.received_at >= :since;
+
+insertPlace:
+INSERT OR REPLACE INTO txn_place(txn_id, lat, lon, accuracy_m, fixed_at) VALUES (?, ?, ?, ?, ?);
+
+selectPlace:
+SELECT * FROM txn_place WHERE txn_id = ?;
+
+selectPlacesFor:
+SELECT * FROM txn_place WHERE txn_id IN ?;
+
+deletePlace:
+DELETE FROM txn_place WHERE txn_id = ?;

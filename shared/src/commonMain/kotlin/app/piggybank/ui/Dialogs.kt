@@ -191,7 +191,10 @@ fun RateDialog(currency: String, current: String?, home: Currency, onDismiss: ()
 
 /** Tapping a payment: mark a refund (B6), change its tag, or count a hidden one (D9). */
 @Composable
-fun TxnDialog(t: TxnItem, home: Currency, onDismiss: () -> Unit, onRefund: (Long) -> Unit, onChange: () -> Unit, onCountIt: () -> Unit) {
+fun TxnDialog(
+    t: TxnItem, home: Currency, onDismiss: () -> Unit, onRefund: (Long) -> Unit, onChange: () -> Unit, onCountIt: () -> Unit,
+    onOpenMap: () -> Unit = {}, onRemovePlace: () -> Unit = {},
+) {
     var refund by remember { mutableStateOf("") }
     val parsed = Money.parse(refund, home)
     AlertDialog(
@@ -201,6 +204,14 @@ fun TxnDialog(t: TxnItem, home: Currency, onDismiss: () -> Unit, onRefund: (Long
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${t.amount} · ${t.whenLabel}", color = Piggy.Ink)
                 t.refunded?.let { Text("Refunded so far: $it", color = Piggy.Invest) }
+                t.place?.let { p ->
+                    Text("📍 ${p.lat.fmt5()}, ${p.lon.fmt5()}" + (p.accuracyM?.let { " · within ${it.toInt()} m" } ?: ""), color = Piggy.Ink)
+                    Text("Where your phone was when the SMS arrived.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+                    Row {
+                        TextButton(onClick = onOpenMap) { Text("Open in Maps", color = Piggy.Accent) }
+                        TextButton(onClick = onRemovePlace) { Text("Remove", color = Piggy.Muted) }
+                    }
+                }
                 if (t.kind == "SPEND") {
                     AmountField("Refund received (${home.code})", refund, { refund = it })
                     Text("Lowers this spend; it can't go below zero.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
@@ -259,4 +270,12 @@ fun NewCategoryDialog(topLevel: String, taken: (String) -> String?, onDismiss: (
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Piggy.Muted) } },
         containerColor = Piggy.Card,
     )
+}
+
+/** 5 decimals ≈ 1 m, without platform number formatting. */
+private fun Double.fmt5(): String {
+    val scaled = kotlin.math.round(this * 100_000).toLong()
+    val sign = if (scaled < 0) "-" else ""
+    val a = kotlin.math.abs(scaled)
+    return "$sign${a / 100_000}.${(a % 100_000).toString().padStart(5, '0')}"
 }

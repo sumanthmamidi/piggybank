@@ -40,4 +40,14 @@ internal fun upgradeInPlace(driver: SqlDriver) {
             0,
         )
     }
+
+    // Saved places (opt-in): a side table, so payments stay as they were.
+    if (txnColumns.isNotEmpty()) {
+        driver.execute(
+            null,
+            "CREATE TABLE IF NOT EXISTS txn_place (txn_id INTEGER PRIMARY KEY REFERENCES txn(id) ON DELETE CASCADE, " +
+                "lat REAL NOT NULL, lon REAL NOT NULL, accuracy_m REAL, fixed_at INTEGER NOT NULL)",
+            0,
+        )
+    }
 }

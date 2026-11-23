@@ -36,6 +36,8 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
                 color = Color(0xFFB5B9C3), style = MaterialTheme.typography.bodySmall)
         }
 
+        SavePlacesCard(s, c)
+
         Section("Your rules (${s.rules.size})")
         if (s.rules.isEmpty()) Text("No rules yet. Confirm a payment with \"Always tag like this\" on.", color = Piggy.Muted)
         s.rules.forEach { r ->
@@ -73,5 +75,33 @@ fun RulesScreen(s: UiState, c: AppController, modifier: Modifier) {
 
         Section("SMS formats")
         PiggyCard { Text(s.formats, color = Piggy.Ink) }
+    }
+}
+
+/** Opt-in: attach the phone's location to payment SMS as they arrive. */
+@Composable
+private fun SavePlacesCard(s: UiState, c: AppController) {
+    PiggyCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Save where I paid", fontWeight = FontWeight.Bold, color = Piggy.Ink)
+                Text("When a payment SMS arrives, note where your phone is. Skips autopay, mandates, bills and foreign charges. " +
+                    "Stays on this phone; Open in Maps hands the spot to your maps app.",
+                    color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(s.savePlaces, { c.setSavePlaces(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Piggy.Ink))
+        }
+        if (s.savePlaces) when (s.placeAccess) {
+            PlaceAccess.ALWAYS -> Text("On for new payments, even with the app closed.", color = Piggy.Invest, style = MaterialTheme.typography.bodySmall)
+            PlaceAccess.WHILE_OPEN -> {
+                Text("Only works while PiggyBank is open. Choose \"Allow all the time\" so it works when the SMS arrives with the app closed.",
+                    color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = c::requestPlaceAccess) { Text("Allow all the time", color = Piggy.Accent) }
+            }
+            PlaceAccess.NONE -> {
+                Text("Location access is off, so nothing is saved.", color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = c::requestPlaceAccess) { Text("Allow location", color = Piggy.Accent) }
+            }
+        }
     }
 }

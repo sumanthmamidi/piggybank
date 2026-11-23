@@ -129,7 +129,9 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
         TxnDialog(t, s.home, onDismiss = { selected = null },
             onRefund = { c.markRefund(t.id, it); selected = null },
             onChange = { c.reopen(t.id); selected = null; openReview(ReviewSection.TODAY) },
-            onCountIt = { c.countIt(t.id); selected = null })
+            onCountIt = { c.countIt(t.id); selected = null },
+            onOpenMap = { c.openMap(t) },
+            onRemovePlace = { c.removePlace(t.id); selected = null })
     }
 }
 

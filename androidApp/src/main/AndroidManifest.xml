@@ -6,11 +6,23 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Opt-in "save where I paid": the location is read from the OS and stored on the phone only. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- SMS needs a phone, but the app still installs on tablets/Chromebooks for restore and review. -->
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <!-- No INTERNET permission: the app cannot open any network connection. -->
+
+    <!-- "Open in Maps" hands a geo: link to whichever maps app is installed. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
 
     <application
         android:name=".PiggyApplication"

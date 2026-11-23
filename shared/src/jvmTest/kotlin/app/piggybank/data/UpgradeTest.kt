@@ -24,4 +24,13 @@ class UpgradeTest {
         assertNull(auto.reviewed_at)
         assertEquals("SELF_TRANSFER", user.kind)
     }
+
+    /** A database from before saved places gets the side table on open. */
+    @Test fun oldDatabaseGetsThePlaceTable() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { PiggyDatabase.Schema.create(it) }
+        driver.execute(null, "DROP TABLE txn_place", 0)
+        val db = createDatabase(driver)
+        createDatabase(driver)
+        assertNull(db.placeQueries.selectPlace(1).executeAsOneOrNull())
+    }
 }

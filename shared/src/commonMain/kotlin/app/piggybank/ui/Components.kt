@@ -129,7 +129,7 @@ fun TxnRow(t: TxnItem, trailing: (@Composable () -> Unit)? = null, onClick: (() 
                 else -> "Not tagged yet"
             }
             Text(
-                listOf(tag, t.whenLabel, t.subtitle).filter { it.isNotEmpty() }.joinToString(" · ") + if (t.auto) " · auto" else "",
+                listOf(tag, t.whenLabel, t.subtitle).filter { it.isNotEmpty() }.joinToString(" · ") + (if (t.auto) " · auto" else "") + (if (t.place != null) " · 📍" else ""),
                 color = Piggy.Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2,
             )
             t.refunded?.let { Text("Refunded $it", color = Piggy.Invest, style = MaterialTheme.typography.bodySmall) }
