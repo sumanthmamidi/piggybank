@@ -38,6 +38,33 @@ class ReviewService(
         if (remember) Classifier(db, now, tz).run()
     }
 
+    /**
+     * Of [ids], the payments the app already identified (a category guess) that need no question:
+     * no suggested transfer, no possible duplicate, no missing ₹ rate.
+     */
+    fun identifiedGuesses(ids: List<Long>): List<Long> = ids.filter { id ->
+        val t = db.txnQueries.selectById(id).executeAsOneOrNull() ?: return@filter false
+        t.tag_source == "GUESS" && t.reviewed_at == null && t.category_id != null && t.suggested_kind == null &&
+            t.duplicate_of == null && t.home_amount_minor != null &&
+            db.txnQueries.selectPossibleDuplicate(id).executeAsOneOrNull() == null
+    }
+
+    /**
+     * Catch-up's "Tag all identified": confirms each guess as it stands. No rule is saved, so future
+     * payments to these payees are still asked about. Returns how many were tagged.
+     */
+    fun acceptGuesses(ids: List<Long>): Int {
+        val picked = identifiedGuesses(ids)
+        db.transaction {
+            val at = now()
+            for (id in picked) {
+                val t = db.txnQueries.selectById(id).executeAsOne()
+                db.txnQueries.tag(t.kind, t.category_id, if (t.kind == "SPEND") t.need_want else null, "USER", null, at, id)
+            }
+        }
+        return picked.size
+    }
+
     private fun upsertRule(vpa: String?, counterparty: String?, kind: String, categoryId: Long?, needWant: String?, fromTxn: Long): Long? {
         val (field, pattern) = when {
             vpa != null -> "VPA" to vpa.lowercase()

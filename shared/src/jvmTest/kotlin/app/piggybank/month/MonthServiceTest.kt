@@ -67,4 +67,18 @@ class MonthServiceTest {
         val rent = db.categoryQueries.selectByName("Rent").executeAsOne().id
         assertEquals(setOf(rent), svc.fixedCategories())
     }
+
+    @Test fun addCategoryFromAReviewCard() {
+        val pets = svc.addCategory("  Pets ", "SPENDS", "NEED")!!
+        val row = db.categoryQueries.selectById(pets).executeAsOne()
+        assertEquals("Pets", row.name)
+        assertEquals("SPENDS", row.top_level)
+        assertEquals("NEED", row.default_need_want)
+        assertEquals(110L, row.sort) // after the starter spends, so it shows last among them
+        assertEquals(pets, svc.addCategory("pets", "SPENDS", "WANT")) // same name in any case: the same category
+
+        val gold = svc.addCategory("Gold", "INVESTMENTS", "WANT")!!
+        assertNull(db.categoryQueries.selectById(gold).executeAsOne().default_need_want) // investments have no Need/Want
+        assertNull(svc.addCategory("Self-transfer", "SPENDS", "NEED")) // name used under another top level
+    }
 }

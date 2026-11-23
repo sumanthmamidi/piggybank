@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -48,7 +49,10 @@ fun ReviewScreen(s: UiState, c: AppController, section: Int, onSection: (Int) ->
         )
         when (section) {
             ReviewSection.TODAY -> TodayReview(s, c)
-            ReviewSection.CATCH_UP -> CardStack(s.catchUp, s, c, empty = "Catch-up is done. Every imported payment is tagged.")
+            ReviewSection.CATCH_UP -> {
+                if (s.catchUpCount > 10 && s.catchUpIdentified > 0) TagAllIdentified(s, c)
+                CardStack(s.catchUp, s, c, empty = "Catch-up is done. Every imported payment is tagged.")
+            }
             else -> Candidates(s, c)
         }
     }
@@ -80,6 +84,34 @@ private fun TodayReview(s: UiState, c: AppController) {
     }
 }
 
+/** Catch-up shortcut for when the user is done reviewing one by one. Never saves rules. */
+@Composable
+private fun TagAllIdentified(s: UiState, c: AppController) {
+    var asking by remember { mutableStateOf(false) }
+    val n = s.catchUpIdentified
+    val plural = if (n == 1) "" else "s"
+    PiggyCard {
+        Text("Done reviewing one by one?", fontWeight = FontWeight.Bold, color = Piggy.Ink)
+        Text("$n of ${s.catchUpCount} payments already have a category picked. Tag them as they are; the rest stay here.",
+            color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+        SecondaryButton("Tag all $n identified", Modifier.fillMaxWidth()) { asking = true }
+    }
+    if (asking) AlertDialog(
+        onDismissRequest = { asking = false },
+        title = { Text("Tag $n payment$plural?") },
+        text = {
+            Text("Each gets the category already shown on its card. Nothing is remembered for future payments, " +
+                "so new ones from these payees will still be asked. Possible transfers, duplicates and payments " +
+                "needing a rate are left for you.", color = Piggy.Ink)
+        },
+        confirmButton = {
+            TextButton(onClick = { asking = false; c.tagAllIdentified() }) { Text("Tag all", color = Piggy.Ink, fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel", color = Piggy.Muted) } },
+        containerColor = Piggy.Card,
+    )
+}
+
 /** Shows the first card; skipped payees move to the back of the stack. */
 @Composable
 private fun CardStack(groups: List<ReviewGroup>, s: UiState, c: AppController, empty: String) {
@@ -100,6 +132,7 @@ private fun CardStack(groups: List<ReviewGroup>, s: UiState, c: AppController, e
         onSkip = { skipped.remove(current.key); skipped.add(current.key) },
         onDuplicate = { c.markDuplicate(it) },
         onSeparate = { c.separatePayments(it) },
+        onAddCategory = c::addCategory,
     )
 }
 
@@ -117,7 +150,9 @@ private fun ReviewCard(
     onSkip: () -> Unit,
     onDuplicate: (DuplicateHint) -> Unit,
     onSeparate: (DuplicateHint) -> Unit,
+    onAddCategory: (name: String, topLevel: String, needWant: String?, onAdded: (Long?) -> Unit) -> Unit,
 ) {
+    var adding by remember(g.key) { mutableStateOf<String?>(null) } // top level of the category being added
     var kind by remember(g.key) { mutableStateOf(g.kind) }
     var categoryId by remember(g.key) { mutableStateOf(g.categoryId) }
     var needWant by remember(g.key) { mutableStateOf(g.needWant ?: categories.firstOrNull { it.id == g.categoryId }?.defaultNeedWant) }
@@ -183,7 +218,24 @@ private fun ReviewCard(
                         if (kind == "SPEND") needWant = cat.defaultNeedWant ?: needWant
                     }
                 }
+                Chip("+ New category", false, color = Piggy.Accent) { adding = topLevel }
             }
+        }
+        adding?.let { level ->
+            NewCategoryDialog(
+                topLevel = level,
+                taken = { name -> categories.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) && it.topLevel != level }?.topLevel },
+                onDismiss = { adding = null },
+                onSave = { name, nw ->
+                    onAddCategory(name, level, nw) { id ->
+                        if (id != null) {
+                            categoryId = id
+                            if (level == "SPENDS") needWant = nw ?: needWant
+                        }
+                    }
+                    adding = null
+                },
+            )
         }
         // E8: Need/Want only for spends.
         if (kind == "SPEND") {

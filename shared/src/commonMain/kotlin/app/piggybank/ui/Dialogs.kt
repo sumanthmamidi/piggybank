@@ -223,3 +223,40 @@ fun TxnDialog(t: TxnItem, home: Currency, onDismiss: () -> Unit, onRefund: (Long
         containerColor = Piggy.Card,
     )
 }
+
+/** A category the user is missing, added from a review card and picked right away. */
+@Composable
+fun NewCategoryDialog(topLevel: String, taken: (String) -> String?, onDismiss: () -> Unit, onSave: (name: String, needWant: String?) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var needWant by remember { mutableStateOf<String?>(null) }
+    val spend = topLevel == "SPENDS"
+    val clash = taken(name)
+    val ok = name.isNotBlank() && clash == null && (!spend || needWant != null)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (spend) "New spend category" else "New investment category") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { if (it.length <= app.piggybank.month.MAX_CATEGORY_NAME) name = it },
+                    label = { Text("Name") }, placeholder = { Text(if (spend) "e.g. Pets" else "e.g. Gold") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (clash != null) Text("That name is already used for ${if (clash == "SPENDS") "spends" else if (clash == "INVESTMENTS") "investments" else "hidden payments"}.",
+                    color = Piggy.Accent, style = MaterialTheme.typography.bodySmall)
+                if (spend) {
+                    Text("Usually a", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip("Need", needWant == "NEED", Piggy.Needs) { needWant = "NEED" }
+                        Chip("Want", needWant == "WANT", Piggy.Wants) { needWant = "WANT" }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = ok, onClick = { onSave(name.trim(), if (spend) needWant else null) }) {
+                Text("Add", color = if (ok) Piggy.Ink else Piggy.Line, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Piggy.Muted) } },
+        containerColor = Piggy.Card,
+    )
+}

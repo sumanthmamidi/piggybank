@@ -41,3 +41,15 @@ SELECT * FROM category WHERE id = ?;
 
 selectByName:
 SELECT * FROM category WHERE name = ?;
+
+selectByNameNoCase:
+SELECT * FROM category WHERE lower(name) = lower(?);
+
+nextSort:
+SELECT coalesce(max(sort), 0) + 10 FROM category WHERE top_level = ?;
+
+unarchive:
+UPDATE category SET archived = 0 WHERE id = ?;
+
+lastInsertId:
+SELECT last_insert_rowid();

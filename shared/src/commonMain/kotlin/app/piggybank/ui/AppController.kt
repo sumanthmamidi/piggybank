@@ -132,6 +132,8 @@ data class UiState(
     val queueCount: Int,
     val catchUp: List<ReviewGroup>,
     val catchUpCount: Int,
+    /** Catch-up payments already identified that "Tag all identified" would confirm. */
+    val catchUpIdentified: Int,
     val autoTaggedToday: List<TxnItem>,
     val candidates: List<SmsRow>,
     val dayClosed: Boolean,
@@ -211,6 +213,22 @@ class AppController(
     fun confirm(group: ReviewGroup, kind: String, categoryId: Long?, needWant: String?, remember: Boolean, rate: String? = null) = act {
         if (rate != null && group.foreign != null) months.setRate(group.foreign.currency, rate)
         review.tag(group.txns.map { it.id }, kind, categoryId, needWant, remember)
+    }
+
+    /** Confirms every identified catch-up guess as it stands, without saving rules for future payments. */
+    fun tagAllIdentified() = act {
+        review.acceptGuesses(state?.catchUp?.flatMap { g -> g.txns.map { it.id } } ?: emptyList())
+    }
+
+    /** Adds a category from a review card; [onAdded] gets its id (or null if the name is taken elsewhere) once the state has it. */
+    fun addCategory(name: String, topLevel: String, needWant: String?, onAdded: (Long?) -> Unit) {
+        scope.launch {
+            val (id, next) = withContext(Dispatchers.Default) {
+                lock.withLock { months.addCategory(name, topLevel, needWant) to load() }
+            }
+            state = next
+            onAdded(id)
+        }
     }
 
     fun notAPayment(group: ReviewGroup) = act { group.txns.forEach { review.notAPayment(it.id) } }
@@ -385,6 +403,7 @@ class AppController(
             queueCount = queueRows.size,
             catchUp = groups(catchUpRows, home, zone, today, withDuplicates = true, showFrom = false, rates = savedRates),
             catchUpCount = catchUpRows.size,
+            catchUpIdentified = review.identifiedGuesses(catchUpRows.map { it.id }).size,
             autoTaggedToday = auto,
             candidates = db.smsQueries.selectCandidatesBetween(0, Long.MAX_VALUE).executeAsList().map {
                 SmsRow(it.id, whenLabel(it.received_at, zone, today), it.sender, it.body)

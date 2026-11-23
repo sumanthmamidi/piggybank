@@ -275,4 +275,27 @@ class ReviewTest {
         receive("Rs.380.00 spent on HDFC Bank Card x4421 at SWIGGY on 21-11-26." to at(21))
         assertTrue(txns().isEmpty())
     }
+
+    /** Catch-up "Tag all identified": confirms guesses as they are, asks the rest, and saves no rules. */
+    @Test fun tagAllIdentifiedConfirmsGuessesWithoutRules() {
+        receive(swiggyCard to at(20))
+        receive("Additional Purchase txn of Rs.5000, dtd 19/11/2026 has been processed under folio XXXXXXXX5050." to at(19), sender = "VM-NIMFND")
+        receive("Rs.250.00 debited from A/c XX1111 to VPA ravi.kumar@okaxis on 18-11-26." to at(18)) // a person: never guessed
+        receive("Transaction Successful! USD23.60 has been debited to your SBI Credit Card XX9999 against recurring e-mandate. Details: Merchant: ACMECLOUD SiHub ID: Y1" to at(17), sender = "VM-SBICRD") // needs a rate
+        val all = txns().map { it.id }
+        assertEquals(2, review.identifiedGuesses(all).size)
+
+        assertEquals(2, review.acceptGuesses(all))
+        val tagged = txns().filter { it.reviewed_at != null }
+        assertEquals(setOf("SPEND", "INVESTMENT"), tagged.map { it.kind }.toSet())
+        assertTrue(tagged.all { it.tag_source == "USER" && it.rule_id == null && it.category_id != null })
+        assertEquals(2, txns().count { it.reviewed_at == null }) // the person and the USD payment still wait
+        assertTrue(db.ruleQueries.selectAll().executeAsList().isEmpty())
+
+        // Nothing remembered: the next Swiggy payment is still only a guess to confirm.
+        receive("Rs.380.00 spent on HDFC Bank Card x4421 at SWIGGY on 21-11-26." to at(21))
+        val next = txns().maxBy { it.occurred_at }
+        assertEquals("GUESS", next.tag_source)
+        assertNull(next.reviewed_at)
+    }
 }

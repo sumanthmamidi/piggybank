@@ -27,11 +27,35 @@ data class IncomeLine(
 )
 
 /** Income, budgets, rates and refunds: everything the monthly review reads and the user sets up. */
+const val MAX_CATEGORY_NAME = 30
+
 class MonthService(
     private val db: PiggyDatabase,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
     val home: Currency get() = Currency.of(db.appQueries.getSetting("home_currency").executeAsOneOrNull() ?: "INR")
+
+    // ---- Categories ----
+
+    /**
+     * Adds a category the user typed on a review card, under SPENDS or INVESTMENTS, and returns its id.
+     * A name already in use (any case) returns that category instead, brought back if it was archived;
+     * a name used under a different top level returns null.
+     */
+    fun addCategory(name: String, topLevel: String, needWant: String?): Long? = db.transactionWithResult {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        require(clean.isNotEmpty() && clean.length <= MAX_CATEGORY_NAME) { "Category name must be 1–$MAX_CATEGORY_NAME characters" }
+        require(topLevel == "SPENDS" || topLevel == "INVESTMENTS") { "Only spend or investment categories can be added" }
+        val existing = db.categoryQueries.selectByNameNoCase(clean).executeAsOneOrNull()
+        if (existing != null) {
+            if (existing.top_level != topLevel) return@transactionWithResult null
+            db.categoryQueries.unarchive(existing.id)
+            return@transactionWithResult existing.id
+        }
+        val nw = if (topLevel == "SPENDS") needWant else null
+        db.categoryQueries.insert(clean, topLevel, nw, null, db.categoryQueries.nextSort(topLevel).executeAsOne())
+        db.categoryQueries.lastInsertId().executeAsOne()
+    }
 
     // ---- Income (D7–D7d) ----
 
