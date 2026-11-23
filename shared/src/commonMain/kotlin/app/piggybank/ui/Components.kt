@@ -122,14 +122,18 @@ fun TxnRow(t: TxnItem, trailing: (@Composable () -> Unit)? = null, onClick: (() 
         Box(Modifier.width(4.dp).padding(vertical = 14.dp).background(kindColor(t.kind, t.needWant), RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(t.title, fontWeight = FontWeight.Bold, color = Piggy.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(t.title, fontWeight = FontWeight.Bold, color = Piggy.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false))
+                if (t.place != null) { Spacer(Modifier.width(4.dp)); PiggyIcon(PiggyIcons.Pin, Piggy.Accent, 14.dp) }
+            }
             val tag = when {
                 t.kind != "SPEND" -> AppController.kindLabel(t.kind) + (t.category?.takeIf { t.kind == "INVESTMENT" }?.let { " · $it" } ?: "")
                 t.category != null -> t.category + (t.needWant?.let { " · ${AppController.nwLabel(it)}" } ?: "")
                 else -> "Not tagged yet"
             }
             Text(
-                listOf(tag, t.whenLabel, t.subtitle).filter { it.isNotEmpty() }.joinToString(" · ") + (if (t.auto) " · auto" else "") + (if (t.place != null) " · 📍" else ""),
+                listOf(tag, t.whenLabel, t.subtitle).filter { it.isNotEmpty() }.joinToString(" · ") + (if (t.auto) " · auto" else ""),
                 color = Piggy.Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2,
             )
             t.refunded?.let { Text("Refunded $it", color = Piggy.Invest, style = MaterialTheme.typography.bodySmall) }
@@ -139,5 +143,15 @@ fun TxnRow(t: TxnItem, trailing: (@Composable () -> Unit)? = null, onClick: (() 
             Text(t.amount, fontWeight = FontWeight.Bold, color = Piggy.Ink)
             trailing?.invoke()
         }
+    }
+}
+
+/** A card title with a small leading icon. */
+@Composable
+fun IconTitle(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, color: Color = Piggy.Ink, tint: Color = color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        PiggyIcon(icon, tint, 20.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontWeight = FontWeight.Bold, color = color)
     }
 }

@@ -86,7 +86,7 @@ private fun SavePlacesCard(s: UiState, c: AppController) {
     PiggyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Save where I paid", fontWeight = FontWeight.Bold, color = Piggy.Ink)
+                IconTitle(PiggyIcons.Pin, "Save where I paid")
                 Text("When a payment SMS arrives, note where your phone is. Skips autopay, mandates, bills and foreign charges. " +
                     "Stays on this phone; Open in Maps hands the spot to your maps app.",
                     color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
@@ -115,7 +115,7 @@ private fun BackupCard(s: UiState, c: AppController) {
     PiggyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Backup", fontWeight = FontWeight.Bold, color = Piggy.Ink)
+                IconTitle(PiggyIcons.Backup, "Backup")
                 Text("Every night around 2 AM to ${b.folder}. That folder stays when the app is uninstalled. " +
                     "Keeps 7 daily, 4 weekly and 3 monthly backups.",
                     color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)

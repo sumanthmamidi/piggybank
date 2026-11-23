@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +44,7 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
         if (s.access != SmsAccess.READY) SmsSetupCard(s, c)
         // I5: two failed backups in a row.
         if (s.backup.failing) PiggyCard {
-            Text("Backups are failing", fontWeight = FontWeight.Bold, color = Piggy.Accent)
+            IconTitle(PiggyIcons.Backup, "Backups are failing", Piggy.Accent)
             Text(s.backup.lastError ?: "The last two backups didn't finish.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = c::backUpNow) { Text("Try again now", color = Piggy.Accent) }
         }
@@ -81,8 +83,8 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
         // F2/F3: the daily close.
         if (s.dayClosed) {
             PiggyCard {
-                Text("Day closed ✓", fontWeight = FontWeight.Bold, color = Piggy.Invest)
-                Text("${s.streak}-day streak. New payments will still show up here.", color = Piggy.Muted)
+                IconTitle(PiggyIcons.Done, "Day closed", Piggy.Invest)
+                StreakLine("${s.streak}-day streak. New payments will still show up here.")
             }
         } else {
             PiggyCard {
@@ -90,19 +92,20 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
                     if (s.queueCount == 0) "Nothing to review today" else "${s.queueCount} payment${if (s.queueCount == 1) "" else "s"} to review",
                     fontWeight = FontWeight.Bold, color = Piggy.Ink,
                 )
-                Text(if (s.streak > 0) "${s.streak}-day streak · close today to keep it" else "Close your day to start a streak", color = Piggy.Muted)
+                StreakLine(if (s.streak > 0) "${s.streak}-day streak · close today to keep it" else "Close your day to start a streak")
                 PrimaryButton("Close your day", Modifier.fillMaxWidth()) { openReview(ReviewSection.TODAY) }
             }
         }
 
         if (s.catchUpCount > 0) {
             LinkCard(
+                PiggyIcons.History,
                 "Catch-up: ${s.catchUpCount} past payments",
                 "From the SMS history you imported. Tag them any time; they're grouped by payee.",
             ) { openReview(ReviewSection.CATCH_UP) }
         }
         if (s.candidates.isNotEmpty()) {
-            LinkCard("SMS not read as a payment? Pick it", "${s.candidates.size} SMS mention an amount but weren't read as a payment.") {
+            LinkCard(PiggyIcons.Message, "SMS not read as a payment? Pick it", "${s.candidates.size} SMS mention an amount but weren't read as a payment.") {
                 openReview(ReviewSection.SMS)
             }
         }
@@ -129,7 +132,11 @@ fun TodayScreen(s: UiState, c: AppController, openReview: (Int) -> Unit, openMon
                     if (s.syncing) "Checking for new SMS…" else s.lastResult ?: "New SMS are read as they arrive.",
                     color = Piggy.Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).padding(top = 12.dp),
                 )
-                if (!s.syncing) TextButton(onClick = c::syncNow) { Text("Check now", color = Piggy.Accent) }
+                if (!s.syncing) TextButton(onClick = c::syncNow) {
+                    PiggyIcon(PiggyIcons.Refresh, Piggy.Accent, 16.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Check now", color = Piggy.Accent)
+                }
             }
         }
         Text(
@@ -171,10 +178,26 @@ private fun Tile(label: String, value: String, color: Color, modifier: Modifier)
 }
 
 @Composable
-private fun LinkCard(title: String, body: String, onClick: () -> Unit) {
+private fun LinkCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, body: String, onClick: () -> Unit) {
     PiggyCard(Modifier.clickable(onClick = onClick)) {
-        Text("$title ›", fontWeight = FontWeight.Bold, color = Piggy.Ink)
-        Text(body, color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PiggyIcon(icon, Piggy.Ink, 22.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold, color = Piggy.Ink)
+                Text(body, color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            PiggyIcon(PiggyIcons.ChevronRight, Piggy.Muted, 20.dp)
+        }
+    }
+}
+
+@Composable
+private fun StreakLine(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        PiggyIcon(PiggyIcons.Flame, Piggy.Wants, 16.dp)
+        Spacer(Modifier.width(6.dp))
+        Text(text, color = Piggy.Muted)
     }
 }
 

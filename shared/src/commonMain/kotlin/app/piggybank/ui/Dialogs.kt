@@ -205,7 +205,10 @@ fun TxnDialog(
                 Text("${t.amount} · ${t.whenLabel}", color = Piggy.Ink)
                 t.refunded?.let { Text("Refunded so far: $it", color = Piggy.Invest) }
                 t.place?.let { p ->
-                    Text("📍 ${p.lat.fmt5()}, ${p.lon.fmt5()}" + (p.accuracyM?.let { " · within ${it.toInt()} m" } ?: ""), color = Piggy.Ink)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PiggyIcon(PiggyIcons.Pin, Piggy.Accent, 18.dp)
+                        Text("  ${p.lat.fmt5()}, ${p.lon.fmt5()}" + (p.accuracyM?.let { " · within ${it.toInt()} m" } ?: ""), color = Piggy.Ink)
+                    }
                     Text("Where your phone was when the SMS arrived.", color = Piggy.Muted, style = MaterialTheme.typography.bodySmall)
                     Row {
                         TextButton(onClick = onOpenMap) { Text("Open in Maps", color = Piggy.Accent) }

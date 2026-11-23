@@ -55,24 +55,12 @@ internal fun CatchUpFilterButton(s: UiState, c: AppController) {
             Modifier.clickable { open = true }.padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FilterIcon()
+            PiggyIcon(PiggyIcons.Filter, Piggy.Ink, 18.dp)
             Spacer(Modifier.width(6.dp))
             Text("Filter", color = Piggy.Ink, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
         }
     }
     if (open) CatchUpFilters(s, c) { open = false }
-}
-
-/** Three lines getting shorter: the usual filter glyph, drawn so no icon library is needed. */
-@Composable
-private fun FilterIcon() {
-    Canvas(Modifier.size(18.dp)) {
-        val stroke = 2.dp.toPx()
-        listOf(0.2f to 1f, 0.5f to 0.66f, 0.8f to 0.33f).forEach { (y, w) ->
-            val half = size.width * w / 2
-            drawLine(Piggy.Ink, Offset(size.width / 2 - half, size.height * y), Offset(size.width / 2 + half, size.height * y), stroke, StrokeCap.Round)
-        }
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

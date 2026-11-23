@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -24,7 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-enum class Tab(val label: String) { TODAY("Today"), REVIEW("Review"), MONTH("Monthly"), RULES("Rules") }
+enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    TODAY("Today", PiggyIcons.Today), REVIEW("Review", PiggyIcons.Review),
+    MONTH("Monthly", PiggyIcons.Monthly), RULES("Rules", PiggyIcons.Rules),
+}
 
 /** Review tab sections. */
 object ReviewSection { const val TODAY = 0; const val CATCH_UP = 1; const val SMS = 2 }
@@ -47,18 +53,21 @@ fun App(controller: AppController) {
                             selected = selected,
                             onClick = { tab = t },
                             icon = {
+                                // A dot on Review while today's payments wait.
                                 val badge = t == Tab.REVIEW && state.queueCount > 0 && !state.dayClosed
-                                Box(
-                                    Modifier.size(if (badge) 12.dp else 10.dp).background(
-                                        if (selected || badge) Piggy.Accent else Piggy.Line, RoundedCornerShape(3.dp),
+                                Box {
+                                    PiggyIcon(t.icon, if (selected) Piggy.Ink else Piggy.Muted, 24.dp)
+                                    if (badge) Box(
+                                        Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp).size(9.dp)
+                                            .background(Piggy.Accent, CircleShape),
                                     )
-                                )
+                                }
                             },
                             label = { Text(t.label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedTextColor = Piggy.Ink,
                                 unselectedTextColor = Piggy.Muted,
-                                indicatorColor = Color.Transparent,
+                                indicatorColor = Piggy.Ground,
                             ),
                         )
                     }
