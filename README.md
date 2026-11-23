@@ -16,7 +16,7 @@ core/parser/data/backup/ui modules when those parts grow (M1–M4).
 
 ## Build
 
-Needs JDK 17. The Android app also needs the Android SDK (platform 35, build-tools,
+Needs JDK 17. The Android app also needs the Android SDK (platform 36, build-tools,
 platform-tools), via Android Studio or `sdkmanager`, with `ANDROID_HOME` set or
 `sdk.dir` in `local.properties`.
 
@@ -29,3 +29,9 @@ platform-tools), via Android Studio or `sdkmanager`, with `ANDROID_HOME` set or
 
 If the wrapper can't download Gradle on your network, a local Gradle 8.14 works the same
 (`gradle :shared:jvmTest`).
+
+## Release
+
+Release builds are signed with the key in `~/.piggybank-release/` (via the git-ignored `keystore.properties`;
+in CI, repository secrets). Every push builds a signed APK and app bundle in GitHub Actions.
+Google Play setup: [docs/PLAY_STORE.md](docs/PLAY_STORE.md).

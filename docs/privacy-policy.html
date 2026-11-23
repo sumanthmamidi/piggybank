@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PiggyBank Privacy Policy</title>
+<style>
+  :root { --ink: #1d2230; --muted: #5b6272; --bg: #ffffff; --line: #e3e5ea; --accent: #d94f70; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #eceef3; --muted: #a7adba; --bg: #14161c; --line: #2b2f39; --accent: #f07a96; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .meta { color: var(--muted); margin: 0 0 24px; }
+  .summary { border-left: 4px solid var(--accent); padding: 4px 16px; margin: 16px 0; }
+  li { margin: 4px 0; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>PiggyBank Privacy Policy</h1>
+<p class="meta">Effective 23 November 2026</p>
+
+<div class="summary">
+  <p><strong>In short:</strong> PiggyBank reads your bank and card SMS to track your spending, and keeps everything on your phone.
+  There are no accounts, ads, analytics or trackers, and the developer never receives your data.
+  The only thing that ever leaves your phone is the optional backup to your own Google Drive, if you turn it on.</p>
+</div>
+
+<h2>What PiggyBank is</h2>
+<p>PiggyBank is a personal spending tracker for Android. It finds payment messages from banks, cards and payment apps in your SMS,
+turns them into a list of payments, and helps you tag them into categories and budgets.</p>
+
+<h2>SMS messages</h2>
+<ul>
+  <li>PiggyBank asks for permission to <strong>read SMS</strong> (to scan your inbox for past payments) and to <strong>receive SMS</strong>
+  (to notice new payment messages as they arrive).</li>
+  <li>It uses SMS only to find financial transactions: the amount, date, account or card, and the payee.</li>
+  <li>Messages are processed on your phone. The payment messages it recognizes are stored in PiggyBank's private database on your phone.
+  It doesn't send, forward or upload your SMS anywhere, and it never sends SMS.</li>
+  <li>It doesn't use SMS for advertising, profiling, credit scoring or anything other than showing you your own spending.</li>
+</ul>
+
+<h2>Location (optional, off by default)</h2>
+<ul>
+  <li>If you turn on <strong>Save where I paid</strong>, PiggyBank notes your phone's approximate position when an in-person payment SMS arrives,
+  so you can later see where a payment happened.</li>
+  <li>The location is stored only on your phone, next to that payment. "Open in Maps" hands that one spot to the maps app you choose.</li>
+  <li>You can turn this off at any time, and remove the saved place from any payment.</li>
+</ul>
+
+<h2>Notifications</h2>
+<p>PiggyBank can remind you to review the day's payments. Notifications are created on your phone.</p>
+
+<h2>Backups</h2>
+<ul>
+  <li><strong>On your phone:</strong> PiggyBank can save a backup file each night to the <em>Documents/PiggyBank</em> folder on your phone,
+  so you can restore after reinstalling. That folder is on your phone's storage. You can delete these files at any time.</li>
+  <li><strong>Google Drive (optional, off by default):</strong> if you connect Google Drive, PiggyBank also uploads the backup file to your own
+  Google Drive, into a hidden app folder that only PiggyBank can open. It's sent over an encrypted connection (HTTPS) directly to Google.
+  The developer can't see it. PiggyBank asks only for access to its own app folder, not to the rest of your Drive.
+  Google's handling of your Drive is covered by <a href="https://policies.google.com/privacy">Google's Privacy Policy</a>.</li>
+</ul>
+
+<h2>What PiggyBank doesn't do</h2>
+<ul>
+  <li>No sign-up or account.</li>
+  <li>No ads, no analytics, no crash reporting, no third-party SDKs that collect data.</li>
+  <li>No selling or sharing of data with anyone.</li>
+  <li>No servers: apart from the optional Google Drive backup, PiggyBank makes no network connections.</li>
+</ul>
+
+<h2>Deleting your data</h2>
+<ul>
+  <li>Uninstalling PiggyBank deletes its database from your phone.</li>
+  <li>Backup files in <em>Documents/PiggyBank</em> stay until you delete them, so you can restore later.</li>
+  <li>To delete the Google Drive backup, choose "Turn off Drive" in PiggyBank, then in Google Drive on the web open
+  Settings → Manage apps → PiggyBank → Delete hidden app data.</li>
+</ul>
+
+<h2>Children</h2>
+<p>PiggyBank is not directed at children under 13 and does not knowingly process their data.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the new version will be posted on this page with a new effective date.</p>
+
+<h2>Contact</h2>
+<p>Questions about privacy: <a href="mailto:CONTACT_EMAIL">CONTACT_EMAIL</a></p>
+</main>
+</body>
+</html>
