@@ -175,6 +175,10 @@ in CI through repository secrets. Google Play notes: [docs/PLAY_STORE.md](docs/P
 Real SMS used for parser testing stay on the developer's machine in the git-ignored `testdata/private/`. The tests in
 the repository use synthetic messages only.
 
+## License
+
+[MIT](LICENSE). Use it, change it, build on it.
+
 ## Privacy
 
 See the [privacy policy](docs/privacy-policy.html). In one line: everything stays on your phone, unless you turn on
